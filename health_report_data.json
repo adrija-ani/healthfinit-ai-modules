@@ -1,0 +1,336 @@
+{
+  "patient_info": {
+    "name": "KIRANKUMAR PADAPUDI",
+    "age": "38 Y",
+    "sex": "MALE",
+    "registration_number": "480711 ( AHM-209989 )",
+    "collection_date": null,
+    "reporting_date": null,
+    "lab_name": "Airmed Pathology Pvt. Ltd."
+  },
+  "tests": [
+    {
+      "name": "HEMOGLOBIN",
+      "value": "16.2",
+      "unit": "gm%",
+      "status": "HIGH",
+      "ranges": {
+        "normal_min": 12.0,
+        "normal_max": 16.0,
+        "low": 12.0
+      },
+      "meaning": "Hemoglobin carries oxygen in your blood. Low levels can cause fatigue and anemia.",
+      "tips": "Eat iron-rich foods like spinach, beetroot, and jaggery. Combine with Vitamin C foods like citrus fruits."
+    },
+    {
+      "name": "Total RBC Count",
+      "value": "5.35",
+      "unit": "mil/cumm",
+      "status": "NORMAL",
+      "ranges": {
+        "normal_min": 4.5,
+        "normal_max": 5.5,
+        "low": 4.5
+      },
+      "meaning": "Red blood cells carry oxygen throughout your body.",
+      "tips": "Maintain adequate iron, B12, and folate intake through green vegetables and lean meats."
+    },
+    {
+      "name": "H.CT",
+      "value": "44.2",
+      "unit": "%",
+      "status": "NORMAL",
+      "ranges": {
+        "normal_min": 36.0,
+        "normal_max": 46.0,
+        "low": 36.0
+      },
+      "meaning": "Hematocrit shows the percentage of blood made up of red blood cells.",
+      "tips": "Stay hydrated and maintain a balanced diet rich in iron."
+    },
+    {
+      "name": "M.C.V",
+      "value": "82.62",
+      "unit": "80 - 96\n",
+      "status": "NORMAL",
+      "ranges": {
+        "normal_min": 80.0,
+        "normal_max": 100.0,
+        "low": 80.0
+      },
+      "meaning": "MCV indicates the average size of your red blood cells.",
+      "tips": "Ensure adequate B12 and folate intake through fortified cereals and leafy greens."
+    },
+    {
+      "name": "M.C.H.",
+      "value": "30.3",
+      "unit": "pg",
+      "status": "NORMAL",
+      "reference_range": "26 - 33\n",
+      "meaning": "This test measures m.c.h. levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "M.C.H.C.",
+      "value": "36.7",
+      "unit": "%",
+      "status": "HIGH",
+      "reference_range": "31 - 36\n",
+      "meaning": "This test measures m.c.h.c. levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "R.D.W",
+      "value": "11.8",
+      "unit": "%",
+      "status": "NORMAL",
+      "reference_range": "11.6 - 14.6\n",
+      "meaning": "This test measures r.d.w levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Total WBC Count (TLC)",
+      "value": "6900",
+      "unit": "/cmm",
+      "status": "NORMAL",
+      "ranges": {
+        "normal_min": 4000,
+        "normal_max": 11000,
+        "low": 4000
+      },
+      "meaning": "White blood cells help fight infections and diseases.",
+      "tips": "Maintain good hygiene, eat immune-boosting foods, and get adequate rest."
+    },
+    {
+      "name": "Platelet Count",
+      "value": "245000",
+      "unit": "/cmm",
+      "status": "NORMAL",
+      "ranges": {
+        "normal_min": 150000,
+        "normal_max": 450000,
+        "low": 150000
+      },
+      "meaning": "Platelets help your blood clot and prevent bleeding.",
+      "tips": "Eat foods rich in folate and B12. Avoid excessive alcohol consumption."
+    },
+    {
+      "name": "1 Hour ESR",
+      "value": "12",
+      "unit": "mm",
+      "status": "NORMAL",
+      "ranges": {
+        "normal_min": 0,
+        "normal_max": 20,
+        "low": 0
+      },
+      "meaning": "ESR indicates inflammation in your body. Higher values may suggest infection or inflammation.",
+      "tips": "If elevated, follow up with your doctor. Maintain anti-inflammatory diet with turmeric and omega-3."
+    },
+    {
+      "name": "Polymorphs",
+      "value": "51",
+      "unit": "%",
+      "status": "NORMAL",
+      "reference_range": "40 - 70\n",
+      "meaning": "This test measures polymorphs levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Lymphocytes",
+      "value": "43",
+      "unit": "fL",
+      "status": "HIGH",
+      "reference_range": "20 - 40\n",
+      "meaning": "This test measures lymphocytes levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Eosinophils",
+      "value": "02",
+      "unit": "%",
+      "status": "NORMAL",
+      "reference_range": "1 - 6\n",
+      "meaning": "This test measures eosinophils levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Monocytes",
+      "value": "04",
+      "unit": "%",
+      "status": "NORMAL",
+      "reference_range": "2 - 10\n",
+      "meaning": "This test measures monocytes levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Basophils",
+      "value": "00",
+      "unit": "%",
+      "status": "NORMAL",
+      "reference_range": "0 - 2\n",
+      "meaning": "This test measures basophils levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Mean Blood Glucose",
+      "value": "271.87",
+      "unit": "mg/dL",
+      "status": "NORMAL",
+      "meaning": "This test measures mean blood glucose levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "HbsAg",
+      "value": "Negative",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures hbsag levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "HIV I",
+      "value": "Non Reactive",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures hiv i levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "HIV II",
+      "value": "Non Reactive",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures hiv ii levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Urine Volume",
+      "value": "20",
+      "unit": "ML",
+      "status": "NORMAL",
+      "meaning": "This test measures urine volume levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Urine Colour",
+      "value": "Pale Yellow",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures urine colour levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Urine Appearance",
+      "value": "Clear",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures urine appearance levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Urine Reaction",
+      "value": "Acidic",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures urine reaction levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Specific Gravity",
+      "value": "1.015",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures specific gravity levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Urine Protein",
+      "value": "Nil",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures urine protein levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Urine Glucose",
+      "value": "Present (++)",
+      "unit": "",
+      "status": "ABNORMAL",
+      "meaning": "This test measures urine glucose levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Bile Salts",
+      "value": "Absent",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures bile salts levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Bile Pigments",
+      "value": "Absent",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures bile pigments levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Pus Cells",
+      "value": "1-2",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures pus cells levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Red Cells",
+      "value": "NIL",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures red cells levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Epithelial Cells",
+      "value": "OCCASIONAL",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures epithelial cells levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Casts",
+      "value": "Absent",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures casts levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Fungus",
+      "value": "Absent",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures fungus levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Crystals",
+      "value": "Absent",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures crystals levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    },
+    {
+      "name": "Bacteria",
+      "value": "Absent",
+      "unit": "",
+      "status": "NORMAL",
+      "meaning": "This test measures bacteria levels in your body.",
+      "tips": "Consult with your healthcare provider for specific recommendations based on your results."
+    }
+  ]
+}
