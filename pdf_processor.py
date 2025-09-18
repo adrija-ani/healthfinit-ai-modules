@@ -444,7 +444,7 @@ class PathologyReportExtractor:
         return filename
 
 def main():
-    pdf_path = r"C:\Users\adrij\OneDrive\Desktop\healthfinit\AHM-209989_result_wlpd.pdf"
+    pdf_path = "AHM-209989_result_wlpd.pdf"
     
     try:
         extractor = PathologyReportExtractor()
