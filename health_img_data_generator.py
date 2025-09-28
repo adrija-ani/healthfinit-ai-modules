@@ -25,26 +25,26 @@ age = health_data["patient_info"]["age"]
 
 if sex.startswith("m"):
     if age <= 3:
-        silhouette = "a4-health/src/assets/baby neutral.png"
+        silhouette = "assets/baby neutral.png"
     elif age <= 12:
-        silhouette = "a4-health/src/assets/baby boy.png"
+        silhouette = "assets/baby boy.png"
     elif age <= 20:
-        silhouette = "a4-health/src/assets/adult boy.png"
+        silhouette = "assets/adult boy.png"
     elif age <= 59:
-        silhouette = "a4-health/src/assets/adult man.png"
+        silhouette = "assets/adult man.png"
     else:
-        silhouette = "a4-health/src/assets/old man.png"
+        silhouette = "assets/old man.png"
 else:
     if age <= 3:
-        silhouette = "a4-health/src/assets/baby neutral.png"
+        silhouette = "assets/baby neutral.png"
     elif age <= 12:
-        silhouette = "a4-health/src/assets/baby girl.png"
+        silhouette = "assets/baby girl.png"
     elif age <= 20:
-        silhouette = "a4-health/src/assets/adult girl.png"
+        silhouette = "assets/adult girl.png"
     elif age <= 59:
-        silhouette = "a4-health/src/assets/adult woman.png"
+        silhouette = "assets/adult woman.png"
     else:
-        silhouette = "a4-health/src/assets/old woman.png"
+        silhouette = "assets/old woman.png"
 
 # ------------ Setup Canvas ------------
 W, H = 1000, 1400
