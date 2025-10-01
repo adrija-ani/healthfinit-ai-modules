@@ -1,600 +1,1192 @@
+
+
+# import os
 # import json
-# from reportlab.lib.pagesizes import A4
-# from reportlab.platypus import (
-#     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Flowable, Image
-# )
-# from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-# from reportlab.lib.units import inch
-# from reportlab.lib import colors
-# from reportlab.graphics.shapes import Drawing, Rect, String
-# from reportlab.graphics import renderPDF
+# import requests
+# import re
 # from datetime import datetime
+# from math import pi
+# from io import BytesIO
+
+# # REQUIRED LIBRARIES (from prompt)
+# try:
+#     import cairo
+#     import gi
+#     gi.require_version("Pango", "1.0")
+#     gi.require_version("PangoCairo", "1.0")
+#     from gi.repository import Pango, PangoCairo
+# except ImportError:
+#     print("❌ Critical Error: Please ensure 'cairo', 'gi' (GObject Introspection), 'Pango', and 'PangoCairo' are installed.")
+#     # On many Linux systems, this requires packages like python-gobject, python-cairo, and libpango-1.0-0.
+#     cairo, Pango, PangoCairo = None, None, None
+
 # from deep_translator import GoogleTranslator
 
+# # A4 dimensions in points
+# A4_WIDTH = 595
+# A4_HEIGHT = 842
+# MARGIN = 40
+# LINE_HEIGHT = 12
+# HEADER_HEIGHT = 50
+# FOOTER_HEIGHT = 30
+
+# # ------------------ Font Handling ------------------
+# # Pango font family names and TTF file names
+# FONT_MAP = {
+#     "hi": ("NotoSansDevanagari-Regular.ttf", "Noto Sans Devanagari"),
+#     "bn": ("NotoSansBengali-Regular.ttf", "Noto Sans Bengali"),
+#     "ta": ("NotoSansTamil-Regular.ttf", "Noto Sans Tamil"),
+#     "te": ("NotoSansTelugu-Regular.ttf", "Noto Sans Telugu"),
+#     "ml": ("NotoSansMalayalam-Regular.ttf", "Noto Sans Malayalam"),
+#     "gu": ("NotoSansGujarati-Regular.ttf", "Noto Sans Gujarati"),
+#     "kn": ("NotoSansKannada-Regular.ttf", "Noto Sans Kannada"),
+#     "pa": ("NotoSansGurmukhi-Regular.ttf", "Noto Sans Gurmukhi"),
+#     "or": ("NotoSansOdia-Regular.ttf", "Noto Sans Odia"),
+#     "as": ("NotoSansBengali-Regular.ttf", "Noto Sans Bengali"),
+#     "en": ("NotoSans-Regular.ttf", "Noto Sans")
+# }
+
+
+# def register_font_for_lang(lang_code="en"):
+#     """
+#     Downloads the font if missing. Pango relies on system font config 
+#     to find the font family name returned here.
+#     Returns the Pango font family name string.
+#     """
+#     ttf_file, font_family = FONT_MAP.get(lang_code, FONT_MAP["en"])
+    
+#     # Check if the TTF file is downloaded (needed for dynamic demo)
+#     if not os.path.exists(ttf_file):
+#         folder_map = {
+#             "hi": "NotoSansDevanagari", "bn": "NotoSansBengali", "ta": "NotoSansTamil", 
+#             "te": "NotoSansTelugu", "ml": "NotoSansMalayalam", "gu": "NotoSansGujarati",
+#             "kn": "NotoSansKannada", "pa": "NotoSansGurmukhi", "or": "NotoSansOdia",
+#             "as": "NotoSansBengali", "en": "NotoSans"
+#         }
+#         folder = folder_map.get(lang_code, "NotoSans")
+#         url = f"https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/{folder}/{ttf_file}"
+#         print(f"⬇️ Downloading font for {lang_code}: {ttf_file}")
+#         try:
+#             r = requests.get(url, timeout=30)
+#             r.raise_for_status()
+#             with open(ttf_file, "wb") as f:
+#                 f.write(r.content)
+#         except requests.exceptions.RequestException as e:
+#             print(f"❌ Failed to download font {ttf_file}. Proceeding with fallback: {e}")
+#             return FONT_MAP["en"][1]
+
+#     return font_family
+
+
+# # ------------------ Translation Helper ------------------
 # def translate_text(text, target_lang):
+#     if not text:
+#         return ""
 #     try:
-#         return GoogleTranslator(source='en', target=target_lang).translate(text)
-#     except Exception as e:
+#         trans_text = GoogleTranslator(source="en", target=target_lang).translate(text)
+#         return trans_text
+#     except Exception:
 #         return text
 
+# # ------------------ Cairo/Pango Health Report Generator ------------------
+# class CairoHealthReportGenerator:
+    
+#     def __init__(self, font_family="Noto Sans"):
+#         self.font_family = font_family
+#         self.current_y = MARGIN + HEADER_HEIGHT
+#         self.page_num = 1
+#         self.ctx = None # cairo.Context
+#         self.surface = None # cairo.PDFSurface
 
-# # --- Chart Flowable Wrapper ---
-# class ChartFlowable(Flowable):
-#     def __init__(self, drawing):
-#         Flowable.__init__(self)
-#         self.drawing = drawing
-#         self.width = drawing.width
-#         self.height = drawing.height
+#     # --- Utility: Pango Text Rendering ---
+#     def draw_pango_text(self, text, x, y, size=10, weight='Normal', color_rgb=(0, 0, 0), align='LEFT', max_width=A4_WIDTH):
+        
+#         self.ctx.set_source_rgb(*color_rgb)
+        
+#         # Create Pango layout
+#         layout = PangoCairo.create_layout(self.ctx)
+        
+#         # Set font description
+#         font_desc_str = f'{self.font_family} {weight} {size}'
+#         layout.set_font_description(Pango.FontDescription(font_desc_str))
+        
+#         # Handle simple bold tagging for keys (e.g., <b>Test:</b>)
+#         if '<b>' in text:
+#             layout.set_markup(text, -1)
+#         else:
+#             layout.set_text(text, -1)
+        
+#         # Set width for wrapping
+#         layout.set_width(int((max_width - x) * Pango.SCALE)) 
+#         layout.set_wrap(Pango.WrapMode.WORD)
 
-#     def draw(self):
-#         renderPDF.draw(self.drawing, self.canv, 0, 0)
+#         if align == 'CENTER':
+#             layout.set_alignment(Pango.Alignment.CENTER)
+#         elif align == 'RIGHT':
+#             layout.set_alignment(Pango.Alignment.RIGHT)
+#         else:
+#             layout.set_alignment(Pango.Alignment.LEFT)
+
+#         # Render the text
+#         self.ctx.move_to(x, y)
+#         PangoCairo.show_layout(self.ctx, layout)
+        
+#         # Return the height used by the text
+#         extents = layout.get_extents()
+#         if extents[1].height > 0:
+#             height = extents[1].height / Pango.SCALE
+#             return height
+#         return LINE_HEIGHT
+    
+#     # --- Utility: Color Map ---
+#     def get_status_color(self, status_text):
+#         RED = (1, 0, 0)
+#         BLUE = (0, 0, 1)
+#         GREEN = (0, 0.5, 0)
+        
+#         status_upper = status_text.upper()
+#         if status_upper in ["HIGH", "HOGH", "HIGH", "HIGH"]: 
+#             return RED
+#         elif status_upper in ["LOW", "LOW"]: 
+#             return BLUE
+#         else:
+#             return GREEN
+
+#     # --- Header/Footer/Page Management ---
+#     def start_new_page(self):
+#         if self.page_num > 1:
+#             self.surface.show_page()
+        
+#         self.page_num += 1
+#         # Set Y position for content below the header
+#         self.current_y = MARGIN + HEADER_HEIGHT 
+#         self.draw_header_footer()
+        
+#     def draw_header_footer(self):
+        
+#         BLUE = (0.1, 0.1, 0.5)
+#         GREY = (0.5, 0.5, 0.5)
+        
+#         # --- Header ---
+#         self.ctx.set_source_rgb(*BLUE)
+#         self.ctx.set_line_width(0.5)
+        
+#         # Top line
+#         self.ctx.move_to(MARGIN, HEADER_HEIGHT - 10)
+#         self.ctx.line_to(A4_WIDTH - MARGIN, HEADER_HEIGHT - 10)
+#         self.ctx.stroke()
+        
+#         # Title text (fixed English title on header for simplicity)
+#         self.draw_pango_text("Health Report Summary", MARGIN, 15, 9, 'Bold', BLUE)
+
+#         # --- Footer ---
+#         self.ctx.set_source_rgb(*GREY)
+        
+#         # Date/Page
+#         date_str = f"Generated on {datetime.now().strftime('%B %d, %Y')}"
+#         self.draw_pango_text(date_str, MARGIN, A4_HEIGHT - 20, 8, color_rgb=GREY)
+#         self.draw_pango_text(f"Page {self.page_num}", A4_WIDTH - MARGIN, A4_HEIGHT - 20, 8, color_rgb=GREY, align='RIGHT')
 
 
-# # --- Health Report Generator ---
-# class HealthReportGenerator:
-#     def __init__(self, logo_path="healthfinit-ai-modules/logo_img.png"):
-#         self.styles = getSampleStyleSheet()
-#         self.setup_custom_styles()
-#         self.logo_path = logo_path
-
-#     def setup_custom_styles(self):
-#         """Define custom styles for different sections"""
-#         self.title_style = ParagraphStyle(
-#             'Title',
-#             parent=self.styles['Heading1'],
-#             fontSize=22,
-#             textColor=colors.HexColor("#1A237E"),
-#             alignment=1,  # Center
-#             spaceAfter=20,
-#             fontName='Helvetica-Bold'
-#         )
-
-#         self.sub_title_style = ParagraphStyle(
-#             'Subtitle',
-#             parent=self.styles['Normal'],
-#             fontSize=12,
-#             textColor=colors.grey,
-#             alignment=1,
-#             spaceAfter=30
-#         )
-
-#         self.section_header_style = ParagraphStyle(
-#             'SectionHeader',
-#             parent=self.styles['Heading2'],
-#             fontSize=14,
-#             textColor=colors.HexColor("#0D47A1"),
-#             alignment=0,  # Left
-#             spaceBefore=12,
-#             spaceAfter=6,
-#             fontName='Helvetica-Bold'
-#         )
-
-#         self.normal_text = ParagraphStyle(
-#             'NormalText',
-#             parent=self.styles['Normal'],
-#             fontSize=10,
-#             textColor=colors.black,
-#             alignment=0,
-#             spaceAfter=4,
-#             fontName='Helvetica'
-#         )
-
-#         self.status_high = ParagraphStyle(
-#             'StatusHigh',
-#             parent=self.styles['Normal'],
-#             fontSize=10,
-#             textColor=colors.red,
-#             fontName='Helvetica-Bold'
-#         )
-
-#         self.status_low = ParagraphStyle(
-#             'StatusLow',
-#             parent=self.styles['Normal'],
-#             fontSize=10,
-#             textColor=colors.blue,
-#             fontName='Helvetica-Bold'
-#         )
-
-#         self.status_normal = ParagraphStyle(
-#             'StatusNormal',
-#             parent=self.styles['Normal'],
-#             fontSize=10,
-#             textColor=colors.green,
-#             fontName='Helvetica-Bold'
-#         )
-
-#         self.footnote_style = ParagraphStyle(
-#             'Footnote',
-#             parent=self.styles['Normal'],
-#             fontSize=8,
-#             textColor=colors.grey,
-#             alignment=1,
-#             spaceBefore=20
-#         )
-
+#     # --- Parse reference range ---
 #     def parse_reference_range(self, reference_range):
-#         """Parse string ranges like 70-110 into dict"""
-#         import re
 #         if not reference_range:
 #             return None
-
-#         range_match = re.search(r'(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)', reference_range)
-#         if range_match:
-#             return {
-#                 'normal_min': float(range_match.group(1)),
-#                 'normal_max': float(range_match.group(2))
-#             }
+#         match = re.search(r'(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)', reference_range)
+#         if match:
+#             return {'normal_min': float(match.group(1)), 'normal_max': float(match.group(2))}
 #         return None
 
-#     def create_bar_chart(self, result_value, test_data):
-#         """Create a bar chart visualization for the test"""
-#         drawing = Drawing(300, 50)
+#     # --- Bar chart (using cairo primitives) ---
+#     def draw_bar_chart(self, x_start, y_start, result_value, test_data):
+        
 #         bar_width, bar_height = 220, 12
-#         bar_x, bar_y = 50, 20
-
+        
 #         try:
-#             clean_value = str(result_value).replace(',', '').replace('+', '')
-#             if not clean_value or clean_value.lower() in [
-#                 'nil', 'negative', 'absent', 'present', 'clear'
-#             ]:
-#                 return None
-
-#             numeric_value = float(clean_value)
-
-#             # Determine normal ranges
-#             ranges = test_data.get('ranges') or self.parse_reference_range(
-#                 test_data.get('reference_range', '')
-#             )
+#             val_str = str(result_value).replace(',', '').replace('+', '')
+#             if not val_str or val_str.lower() in ['nil', 'negative', 'absent', 'present', 'clear']:
+#                 self.draw_pango_text("N/A", x_start, y_start, 10, color_rgb=(0.5, 0.5, 0.5))
+#                 return 15
+            
+#             numeric_value = float(val_str)
+#             ranges = test_data.get('ranges') or self.parse_reference_range(test_data.get('reference_range', ''))
 #             if not ranges:
-#                 return None
+#                 self.draw_pango_text("N/A (No range)", x_start, y_start, 10, color_rgb=(0.5, 0.5, 0.5))
+#                 return 15
 
 #             normal_min, normal_max = ranges['normal_min'], ranges['normal_max']
 #             chart_max = max(normal_max * 1.3, numeric_value * 1.2)
+            
+#             # Colors
+#             PINK = (1.0, 0.8, 0.8)
+#             LIGHTGREEN = (0.7, 1.0, 0.7)
+#             LIGHTYELLOW = (1.0, 1.0, 0.7)
+#             RED = (1.0, 0.0, 0.0)
 
-#             # Low - Normal - High regions
+#             # Calculate widths
 #             low_width = (normal_min / chart_max) * bar_width
 #             normal_width = ((normal_max - normal_min) / chart_max) * bar_width
-#             high_width = bar_width - low_width - normal_width
-
+            
+#             # Draw Bar Background
+#             x = x_start
+#             self.ctx.set_line_width(0.25)
+            
+#             # Low
 #             if low_width > 0:
-#                 drawing.add(Rect(bar_x, bar_y, low_width, bar_height,
-#                                  fillColor=colors.pink, strokeColor=colors.black, strokeWidth=0.25))
-#             drawing.add(Rect(bar_x + low_width, bar_y, normal_width, bar_height,
-#                              fillColor=colors.lightgreen, strokeColor=colors.black, strokeWidth=0.25))
+#                 self.ctx.rectangle(x, y_start, low_width, bar_height)
+#                 self.ctx.set_source_rgb(*PINK)
+#                 self.ctx.fill_preserve()
+#                 self.ctx.set_source_rgb(0, 0, 0)
+#                 self.ctx.stroke()
+#                 x += low_width
+                
+#             # Normal
+#             self.ctx.rectangle(x, y_start, normal_width, bar_height)
+#             self.ctx.set_source_rgb(*LIGHTGREEN)
+#             self.ctx.fill_preserve()
+#             self.ctx.set_source_rgb(0, 0, 0)
+#             self.ctx.stroke()
+#             x += normal_width
+
+#             # High (rest of the bar)
+#             high_width = bar_width - (low_width + normal_width)
 #             if high_width > 0:
-#                 drawing.add(Rect(bar_x + low_width + normal_width, bar_y, high_width, bar_height,
-#                                  fillColor=colors.lightyellow, strokeColor=colors.black, strokeWidth=0.25))
+#                 self.ctx.rectangle(x, y_start, high_width, bar_height)
+#                 self.ctx.set_source_rgb(*LIGHTYELLOW)
+#                 self.ctx.fill_preserve()
+#                 self.ctx.set_source_rgb(0, 0, 0)
+#                 self.ctx.stroke()
+            
+#             # Draw Value Marker (Red Line)
+#             value_pos_x = x_start + (min(numeric_value, chart_max) / chart_max) * bar_width
+#             self.ctx.set_source_rgb(*RED)
+#             self.ctx.set_line_width(1.5)
+#             self.ctx.move_to(value_pos_x, y_start - 3)
+#             self.ctx.line_to(value_pos_x, y_start + bar_height + 3)
+#             self.ctx.stroke()
+            
+#             # Draw Value Text
+#             self.draw_pango_text(f"{result_value}", value_pos_x - 10, y_start + bar_height + 5, 7, color_rgb=RED)
 
-#             # Mark value
-#             value_pos = bar_x + (min(numeric_value, chart_max) / chart_max) * bar_width
-#             drawing.add(Rect(value_pos - 1, bar_y - 3, 2, bar_height + 6,
-#                              fillColor=colors.red, strokeColor=colors.red))
-#             drawing.add(String(value_pos - 10, bar_y + bar_height + 5,
-#                                f"{result_value}", fontSize=7, fillColor=colors.red))
-#             return drawing
-
+#             return 35 # Height used by the chart
+            
 #         except Exception:
-#             return None
+#             self.draw_pango_text("N/A", x_start, y_start, 10, color_rgb=(0.5, 0.5, 0.5))
+#             return 15
 
-#     def create_test_section(self, test_data):
-#         """Builds a standardized table for each test"""
-#         elements = []
-
-#         # Status field
-#         status = test_data.get('status', 'UNKNOWN')
-#         if status == "HIGH":
-#             status_para = Paragraph("HIGH", self.status_high)
-#         elif status == "LOW":
-#             status_para = Paragraph("LOW", self.status_low)
-#         else:
-#             status_para = Paragraph("NORMAL", self.status_normal)
-
-#         # Chart
-#         chart = self.create_bar_chart(test_data['value'], test_data)
-#         chart_flowable = ChartFlowable(chart) if chart else Paragraph("N/A", self.normal_text)
-
-#         # Build structured table
-#         table_data = [
-#             [Paragraph("<b>Test:</b>", self.normal_text),
-#              Paragraph(test_data['name'], self.normal_text)],
-#             [Paragraph("<b>Result:</b>", self.normal_text),
-#              Paragraph(f"{test_data['value']} {test_data.get('unit', '')}", self.normal_text)],
-#             [Paragraph("<b>Status:</b>", self.normal_text), status_para],
-#             [Paragraph("<b>Reference:</b>", self.normal_text),
-#              Paragraph(test_data.get('reference_range', 'N/A'), self.normal_text)],
-#             [Paragraph("<b>Chart:</b>", self.normal_text), chart_flowable]
+#     # --- Test section (Manual Table Drawing) ---
+#     def draw_test_section(self, test_data, labels):
+        
+#         CELL_MARGIN = 5
+#         KEY_WIDTH = 80
+#         VALUE_WIDTH = A4_WIDTH - 2 * MARGIN - KEY_WIDTH - 2 * CELL_MARGIN
+        
+#         # Row data: (Key label, Value content, Status related, Chart required)
+#         rows = [
+#             (labels.get('Test','Test'), test_data['name'], False, False),
+#             (labels.get('Result','Result'), f"{test_data['value']} {test_data.get('unit','')}", True, False),
+#             (labels.get('Status','Status'), test_data['status'], True, False),
+#             (labels.get('Reference','Reference'), test_data.get('reference_range','N/A'), False, False),
+#             (labels.get('Chart','Chart'), test_data['value'], False, True)
 #         ]
-
+        
 #         if 'meaning' in test_data and test_data['meaning']:
-#             table_data.append([Paragraph("<b>Meaning:</b>", self.normal_text),
-#                                Paragraph(test_data['meaning'], self.normal_text)])
-
+#             rows.append((labels.get('Meaning','Meaning'), test_data['meaning'], False, False))
 #         if 'tips' in test_data and test_data['tips']:
-#             table_data.append([Paragraph("<b>Tips:</b>", self.normal_text),
-#                                Paragraph(test_data['tips'], self.normal_text)])
+#             rows.append((labels.get('Tips','Tips'), test_data['tips'], False, False))
 
-#         table = Table(table_data, colWidths=[80, 380])
-#         table.setStyle(TableStyle([
-#             ('BOX', (0, 0), (-1, -1), 0.6, colors.grey),
-#             ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.lightgrey),
-#             ('BACKGROUND', (0, 0), (-1, 0), colors.whitesmoke),
-#             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-#             ('LEFTPADDING', (0, 0), (-1, -1), 6),
-#             ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-#             ('TOPPADDING', (0, 0), (-1, -1), 4),
-#             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-#         ]))
+#         # --- 1. Calculate Table Height ---
+#         total_height = 0
+#         row_heights = []
+        
+#         for key, value, is_status, is_chart in rows:
+#             if is_chart:
+#                 height = 35 + 2 * CELL_MARGIN
+#             else:
+#                 # Use a temporary layout to measure wrapping height
+#                 temp_layout = PangoCairo.create_layout(self.ctx)
+#                 # Setting text/markup is necessary for measurement
+#                 if '<b>' in key: temp_layout.set_markup(value, -1)
+#                 else: temp_layout.set_text(value, -1)
+#                 temp_layout.set_font_description(Pango.FontDescription(f'{self.font_family} Normal 10'))
+#                 temp_layout.set_width(int(VALUE_WIDTH * Pango.SCALE)) 
+#                 temp_layout.set_wrap(Pango.WrapMode.WORD)
+                
+#                 pango_height = temp_layout.get_extents()[1].height / Pango.SCALE
+#                 height = max(LINE_HEIGHT, pango_height) + 2 * CELL_MARGIN
+            
+#             row_heights.append(height)
+#             total_height += height
 
-#         elements.append(table)
-#         elements.append(Spacer(1, 0.25 * inch))
-#         return elements
+#         # --- 2. Check Page Break ---
+#         if self.current_y + total_height + 15 > A4_HEIGHT - FOOTER_HEIGHT - MARGIN:
+#             self.start_new_page()
+            
+#         # --- 3. Draw Table Structure ---
+#         table_x = MARGIN
+#         table_y = self.current_y
+#         current_y_pos = table_y
+        
+#         # Outer box
+#         self.ctx.set_line_width(0.6)
+#         self.ctx.set_source_rgb(0.5, 0.5, 0.5) 
+#         self.ctx.rectangle(table_x, table_y, A4_WIDTH - 2 * MARGIN, total_height)
+#         self.ctx.stroke()
+        
+#         # Inner grid setup
+#         self.ctx.set_line_width(0.25)
+#         self.ctx.set_source_rgb(0.8, 0.8, 0.8)
 
-#     def add_header_footer(self, canvas, doc):
-#         """Header and footer for every page"""
-#         canvas.saveState()
+#         # --- 4. Draw Rows and Content ---
+#         for i, ((key, value, is_status, is_chart), row_h) in enumerate(zip(rows, row_heights)):
+            
+#             # Draw Row Separator (Inner Grid)
+#             self.ctx.move_to(table_x, current_y_pos + row_h)
+#             self.ctx.line_to(A4_WIDTH - MARGIN, current_y_pos + row_h)
+#             self.ctx.stroke()
+            
+#             # Draw Key-Value Separator (Inner Grid)
+#             self.ctx.move_to(table_x + KEY_WIDTH, current_y_pos)
+#             self.ctx.line_to(table_x + KEY_WIDTH, current_y_pos + row_h)
+#             self.ctx.stroke()
+            
+#             # Key column background for the first row (Header)
+#             if i == 0:
+#                 self.ctx.rectangle(table_x, current_y_pos, KEY_WIDTH, row_h)
+#                 self.ctx.set_source_rgb(0.95, 0.95, 0.95)
+#                 self.ctx.fill()
+#                 self.ctx.set_source_rgb(0.8, 0.8, 0.8) 
+#                 self.ctx.rectangle(table_x, current_y_pos, KEY_WIDTH, row_h)
+#                 self.ctx.stroke()
 
-#         # --- Add Image on Top ---
+#             # 1. Draw Key Text (Bold using Pango markup)
+#             self.draw_pango_text(f"<b>{key}:</b>", 
+#                                  table_x + CELL_MARGIN, current_y_pos + CELL_MARGIN, 10, 'Bold')
+            
+#             # 2. Draw Value Content
+#             value_x = table_x + KEY_WIDTH + CELL_MARGIN
+#             value_y = current_y_pos + CELL_MARGIN
+            
+#             if is_chart:
+#                 self.draw_bar_chart(value_x, value_y, value, test_data)
+#             elif is_status:
+#                 color_rgb = self.get_status_color(value)
+#                 self.draw_pango_text(value, value_x, value_y, 10, 'Bold', color_rgb=color_rgb, max_width=A4_WIDTH - MARGIN)
+#             else:
+#                 self.draw_pango_text(value, value_x, value_y, 10, max_width=A4_WIDTH - MARGIN)
+                
+#             current_y_pos += row_h
+
+#         self.current_y = current_y_pos + 15 # Spacer after table
+
+
+#     # --- Generate PDF from data ---
+#     def generate_pdf_from_data(self, report_data, output_pdf_path, lang_name="English", labels=None):
+#         if labels is None:
+#             labels = {label: label for label in COMMON_LABELS}
+            
 #         try:
-#             img_width = 240  # adjust size
-#             img_height = 30
-#             x = (A4[0]) / 2
-#             y = A4[1] - 30               # from top margin
-#             canvas.drawImage(self.logo_path, x, y, width=img_width, height=img_height, preserveAspectRatio=True)
-#         except Exception as e:
-#             print(f"⚠️ Could not load image: {e}")
-
-#         # Header
-#         canvas.setFont('Helvetica-Bold', 9)
-#         canvas.setFillColor(colors.HexColor("#1A237E"))
-#         canvas.drawString(30, A4[1] - 30, "Health Report Summary")
-#         # Footer
-#         canvas.setFont('Helvetica', 8)
-#         canvas.setFillColor(colors.grey)
-#         canvas.drawString(30, 20, f"Generated on {datetime.now().strftime('%B %d, %Y')}")
-#         canvas.drawRightString(A4[0] - 30, 20, f"Page {doc.page}")
-#         canvas.restoreState()
-
-#     def generate_pdf(self, json_file_path, output_pdf_path):
-#         try:
-#             with open(json_file_path, 'r', encoding='utf-8') as f:
-#                 report_data = json.load(f)
-
-#             doc = SimpleDocTemplate(output_pdf_path, pagesize=A4,
-#                                     topMargin=0.8 * inch, bottomMargin=0.8 * inch,
-#                                     leftMargin=0.75 * inch, rightMargin=0.75 * inch)
-
-#             story = []
-
-#             # --- Cover Page ---
-#             story.append(Spacer(1, 2 * inch))
-#             story.append(Paragraph("Health Report Summary", self.title_style))
-#             story.append(Paragraph("Confidential Medical Document", self.sub_title_style))
-#             story.append(Paragraph(f"Generated on: {datetime.now().strftime('%B %d, %Y')}",
-#                                    self.normal_text))
-#             story.append(PageBreak())
-
-#             # --- Test Sections ---
-#             tests = report_data.get('tests', [])
-#             for test in tests:
-#                 story.extend(self.create_test_section(test))
-
-#             story.append(Paragraph("End of Report", self.footnote_style))
-
-#             doc.build(story, onFirstPage=self.add_header_footer,
-#                       onLaterPages=self.add_header_footer)
+#             # 1. Setup Cairo Surface and Context
+#             self.surface = cairo.PDFSurface(output_pdf_path, A4_WIDTH, A4_HEIGHT)
+#             self.ctx = cairo.Context(self.surface)
+            
+#             self.page_num = 1
+            
+#             # --- Dedicated First Page for Titles (Page 1) ---
+            
+#             # Set Y position for titles (centered vertically)
+#             self.current_y = A4_HEIGHT
+            
+#             # 1a. Draw Titles
+#             report_title = labels.get("Health Report Summary")
+#             sub_title = labels.get("Confidential Medical Document")
+#             self.start_new_page()
+            
+#             self.draw_pango_text(report_title, A4_WIDTH-600, self.current_y, 22, 'Bold', (0.1, 0.14, 0.5), 'CENTER', max_width=A4_WIDTH)
+#             self.current_y += 40
+#             self.draw_pango_text(sub_title, A4_WIDTH-600, self.current_y, 16, 'Normal', (0.5, 0.5, 0.5), 'CENTER', max_width=A4_WIDTH)
+#             self.current_y += 30
+            
+#             # 1b. Language and Generated Info (at bottom of first page)
+#             lang_label = labels.get('Language','Language')
+#             generated_label = labels.get('Generated on','Generated on')
+            
+#             # Place this info near the bottom, before the footer area
+#             info_y = A4_HEIGHT - 100
+#             self.draw_pango_text(f"<b>{lang_label}:</b> {lang_name}", MARGIN, info_y, 10, 'Normal', max_width=A4_WIDTH)
+#             info_y += 15
+#             self.draw_pango_text(f"<b>{generated_label}:</b> {datetime.now().strftime('%B %d, %Y')}", MARGIN, info_y, 10, 'Normal', max_width=A4_WIDTH)
+            
+#             # Draw the header/footer (Page 1)
+#             self.draw_header_footer()
+            
+#             # --- Start Second Page for Content (Page 2 onwards) ---
+#             self.start_new_page() # Increments page_num to 2 and draws header/footer
+            
+#             # 3. Draw Test Sections
+#             for test in report_data.get('tests', []):
+#                 self.draw_test_section(test, labels)
+            
+#             # 4. End of Report
+#             end_label = labels.get("End of Report", "End of Report")
+#             self.draw_pango_text(end_label, A4_WIDTH / 2, self.current_y + 10, 8, 'Normal', (0.5, 0.5, 0.5), 'CENTER', max_width=A4_WIDTH)
+            
+#             # 5. Finalize PDF
+#             self.surface.finish()
 #             return True
-
+            
 #         except Exception as e:
-#             print(f"Error generating PDF: {str(e)}")
+#             print(f"❌ Error generating PDF: {str(e)}")
 #             return False
 
+# COMMON_LABELS = [
+#     "Health Report Summary", "Confidential Medical Document", "Language",
+#     "Generated on", "End of Report", "Test", "Result", "Status", 
+#     "Reference", "Meaning", "Tips", "Chart"
+# ]
 
-# # --- Main Execution ---
+# def get_translated_labels(lang_code):
+#     """Translates high-level report components."""
+#     translated = {}
+#     for label in COMMON_LABELS:
+#         #translated[label] = translate_text(label, lang_code)
+#         translated[label] = label
+#     return translated
+
+# # ------------------ Multi-language PDF Runner ------------------
+# def generate_multilang_reports(json_file, output_folder):
+#     languages = {
+#         "hi": "Hindi", "bn": "Bengali", "ta": "Tamil", "te": "Telugu",
+#         "ml": "Malayalam", "gu": "Gujarati", "kn": "Kannada",
+#         "pa": "Punjabi", "or": "Odia", "as": "Assamese"
+#     }
+
+#     try:
+#         with open(json_file, 'r', encoding='utf-8') as f:
+#             report_data = json.load(f)
+#     except Exception:
+#         print(f"❌ Error: Could not load or parse '{json_file}'.")
+#         return
+
+#     os.makedirs(output_folder, exist_ok=True)
+
+#     for lang_code, lang_name in languages.items():
+#         # 1. Get Language-Specific Font Family Name
+#         font_family = register_font_for_lang(lang_code)
+
+#         # 2. Get Translated Labels (titles)
+#         labels = get_translated_labels(lang_code)
+
+#         # 3. Translate test data content
+#         translated_data = {"tests": []}
+#         for test in report_data.get("tests", []):
+#             translated_test = {
+#                 "name": translate_text(test["name"], lang_code),
+#                 "value": test["value"],
+#                 "unit": test.get("unit", ""),
+#                 "status": translate_text(test.get("status", ""), lang_code),
+#                 "reference_range": test.get("reference_range", ""),
+#                 "meaning": translate_text(test.get("meaning", ""), lang_code) if test.get("meaning") else "",
+#                 "tips": translate_text(test.get("tips", ""), lang_code) if test.get("tips") else ""
+#             }
+#             translated_data["tests"].append(translated_test)
+
+#         output_pdf = f"{output_folder}/health_report_{lang_code}.pdf"
+        
+#         # 4. Generate PDF using Cairo/Pango
+#         generator = CairoHealthReportGenerator(font_family=font_family)
+#         success = generator.generate_pdf_from_data(translated_data, output_pdf, lang_name, labels)
+        
+#         if success:
+#             print(f"✅ Generated {lang_name} report: {output_pdf} using font: {font_family}")
+#         else:
+#             print(f"❌ Failed to generate {lang_name} report")
+
+# # ------------------ Main ------------------
 # def main():
-#     json_file = "healthfinit-ai-modules/health_report_data.json"
-#     output_pdf = "healthfinit-ai-modules/health_report_summary_test.pdf"
+#     json_file = "health_report_data.json"
+#     output_folder = "reports_multilang"
+    
+#     if not all([cairo, Pango, PangoCairo]):
+#         print("\nExiting. Cairo/Pango (GObject Introspection) libraries are missing or could not be loaded.")
+#         return
 
-#     generator = HealthReportGenerator(logo_path="healthfinit-ai-modules/logo_img.png")
-#     success = generator.generate_pdf(json_file, output_pdf)
+#     os.makedirs(output_folder, exist_ok=True)
 
-#     if success:
-#         print(f"✅ Health report PDF generated successfully: {output_pdf}")
-#     else:
-#         print("❌ Failed to generate PDF")
+#     # --- Dummy JSON Creation if needed ---
+#     if not os.path.exists(json_file):
+#         print(f"Creating dummy '{json_file}'.")
+#         dummy_data = {
+#             "tests": [
+#                 {
+#                     "name": "Hemoglobin",
+#                     "value": "13.5",
+#                     "unit": "g/dL",
+#                     "status": "NORMAL",
+#                     "reference_range": "11.5 - 15.5",
+#                     "meaning": "Hemoglobin is the protein in red blood cells that carries oxygen.",
+#                     "tips": "Maintain a balanced diet rich in iron and B vitamins."
+#                 },
+#                 {
+#                     "name": "Blood Glucose (Fasting)",
+#                     "value": "110",
+#                     "unit": "mg/dL",
+#                     "status": "HIGH",
+#                     "reference_range": "70 - 100",
+#                     "meaning": "Elevated fasting glucose can indicate pre-diabetes or diabetes.",
+#                     "tips": "Consult a doctor. Increase physical activity and reduce sugar intake."
+#                 },
+#                 {
+#                     "name": "Cholesterol (Total)",
+#                     "value": "225",
+#                     "unit": "mg/dL",
+#                     "status": "HIGH",
+#                     "reference_range": "0 - 200",
+#                     "meaning": "High cholesterol increases risk of heart disease.",
+#                     "tips": "Reduce saturated and trans fats. Exercise regularly."
+#                 },
+#                 {
+#                     "name": "Vitamin D",
+#                     "value": "18",
+#                     "unit": "ng/mL",
+#                     "status": "LOW",
+#                     "reference_range": "30 - 100",
+#                     "meaning": "Low Vitamin D can lead to bone density issues.",
+#                     "tips": "Get sun exposure and consider supplements."
+#                 }
+#             ]
+#         }
+#         with open(json_file, 'w', encoding='utf-8') as f:
+#             json.dump(dummy_data, f, indent=4)
+#     # --- End Dummy JSON ---
 
+#     # English PDF first
+#     print("\n--- Generating English Report ---")
+#     en_font_family = register_font_for_lang("en")
+#     try:
+#         with open(json_file, 'r', encoding='utf-8') as f:
+#             report_data = json.load(f)
+#         generator_en = CairoHealthReportGenerator(font_family=en_font_family)
+#         success_en = generator_en.generate_pdf_from_data(report_data, f"{output_folder}/health_report_en.pdf", "English")
+#         if success_en:
+#             print(f"✅ Generated English report: {output_folder}/health_report_en.pdf using font: {en_font_family}")
+#     except Exception as e:
+#         print(f"Exiting main: Could not load or process '{json_file}'. Error: {e}")
+#         return
+
+#     # Generate multi-language reports
+#     print("\n--- Generating Multi-Language Reports ---")
+#     generate_multilang_reports(json_file, output_folder)
 
 # if __name__ == "__main__":
 #     main()
 
-# -*- coding: utf-8 -*-
 import os
 import json
 import requests
 import re
+import unicodedata
 from datetime import datetime
+from math import pi
 from io import BytesIO
 
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Flowable
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-from reportlab.graphics.shapes import Drawing, Rect, String
-from reportlab.graphics import renderPDF
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase import pdfmetrics
+# REQUIRED LIBRARIES (from prompt)
+try:
+    import cairo
+    import gi
+    gi.require_version("Pango", "1.0")
+    gi.require_version("PangoCairo", "1.0")
+    from gi.repository import Pango, PangoCairo
+except ImportError:
+    print("❌ Critical Error: Please ensure 'cairo', 'gi' (GObject Introspection), 'Pango', and 'PangoCairo' are installed.")
+    # On many Linux systems, this requires packages like python-gobject, python-cairo, and libpango-1.0-0.
+    cairo, Pango, PangoCairo = None, None, None
 
 from deep_translator import GoogleTranslator
 
-# ------------------ Chart Flowable ------------------
-class ChartFlowable(Flowable):
-    def __init__(self, drawing):
-        Flowable.__init__(self)
-        self.drawing = drawing
-        self.width = drawing.width
-        self.height = drawing.height
-
-    def draw(self):
-        renderPDF.draw(self.drawing, self.canv, 0, 0)
+# A4 dimensions in points
+A4_WIDTH = 595
+A4_HEIGHT = 842
+MARGIN = 40
+LINE_HEIGHT = 12
+HEADER_HEIGHT = 50
+FOOTER_HEIGHT = 30
 
 # ------------------ Font Handling ------------------
+# Pango font family names and TTF file names
 FONT_MAP = {
-    "hi": ("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari"),
-    "bn": ("NotoSansBengali-Regular.ttf", "NotoSansBengali"),
-    "ta": ("NotoSansTamil-Regular.ttf", "NotoSansTamil"),
-    "te": ("NotoSansTelugu-Regular.ttf", "NotoSansTelugu"),
-    "ml": ("NotoSansMalayalam-Regular.ttf", "NotoSansMalayalam"),
-    "gu": ("NotoSansGujarati-Regular.ttf", "NotoSansGujarati"),
-    "kn": ("NotoSansKannada-Regular.ttf", "NotoSansKannada"),
-    "pa": ("NotoSansGurmukhi-Regular.ttf", "NotoSansGurmukhi"),
-    "or": ("NotoSansOdia-Regular.ttf", "NotoSansOdia"),
-    "as": ("NotoSansBengali-Regular.ttf", "NotoSansAssamese"),
-    "en": ("NotoSans-Regular.ttf", "NotoSans")
+    "hi": ("NotoSansDevanagari-Regular.ttf", "Noto Sans Devanagari"),
+    "bn": ("NotoSansBengali-Regular.ttf", "Noto Sans Bengali"),
+    "ta": ("NotoSansTamil-Regular.ttf", "Noto Sans Tamil"),
+    "te": ("NotoSansTelugu-Regular.ttf", "Noto Sans Telugu"),
+    "ml": ("NotoSansMalayalam-Regular.ttf", "Noto Sans Malayalam"),
+    "gu": ("NotoSansGujarati-Regular.ttf", "Noto Sans Gujarati"),
+    "kn": ("NotoSansKannada-Regular.ttf", "Noto Sans Kannada"),
+    "pa": ("NotoSansGurmukhi-Regular.ttf", "Noto Sans Gurmukhi"),
+    "or": ("NotoSansOdia-Regular.ttf", "Noto Sans Odia"),
+    "as": ("NotoSansBengali-Regular.ttf", "Noto Sans Bengali"),
+    "en": ("NotoSans-Regular.ttf", "Noto Sans")
 }
 
 
 def register_font_for_lang(lang_code="en"):
-    ttf_file, font_name = FONT_MAP.get(lang_code, FONT_MAP["en"])
+    """
+    Downloads the font if missing. Pango relies on system font config 
+    to find the font family name returned here.
+    Returns the Pango font family name string.
+    """
+    ttf_file, font_family = FONT_MAP.get(lang_code, FONT_MAP["en"])
+    
+    # Check if the TTF file is downloaded (needed for dynamic demo)
     if not os.path.exists(ttf_file):
         folder_map = {
-            "hi": "NotoSansDevanagari",
-            "bn": "NotoSansBengali",
-            "ta": "NotoSansTamil",
-            "te": "NotoSansTelugu",
-            "ml": "NotoSansMalayalam",
-            "gu": "NotoSansGujarati",
-            "kn": "NotoSansKannada",
-            "pa": "NotoSansGurmukhi",
-            "or": "NotoSansOdia",
-            "as": "NotoSansBengali",
-            "en": "NotoSans"
+            "hi": "NotoSansDevanagari", "bn": "NotoSansBengali", "ta": "NotoSansTamil", 
+            "te": "NotoSansTelugu", "ml": "NotoSansMalayalam", "gu": "NotoSansGujarati",
+            "kn": "NotoSansKannada", "pa": "NotoSansGurmukhi", "or": "NotoSansOdia",
+            "as": "NotoSansBengali", "en": "NotoSans"
         }
         folder = folder_map.get(lang_code, "NotoSans")
         url = f"https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/{folder}/{ttf_file}"
-        r = requests.get(url)
-        with open(ttf_file, "wb") as f:
-            f.write(r.content)
-    pdfmetrics.registerFont(TTFont(font_name, ttf_file))
-    return font_name
+        print(f"⬇️ Downloading font for {lang_code}: {ttf_file}")
+        try:
+            r = requests.get(url, timeout=30)
+            r.raise_for_status()
+            with open(ttf_file, "wb") as f:
+                f.write(r.content)
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Failed to download font {ttf_file}. Proceeding with fallback: {e}")
+            return FONT_MAP["en"][1]
+
+    return font_family
+
 
 # ------------------ Translation Helper ------------------
 def translate_text(text, target_lang):
     if not text:
         return ""
     try:
-        return GoogleTranslator(source="en", target=target_lang).translate(text)
-    except Exception as e:
-        print(f"⚠️ Translation failed for '{text[:30]}...': {e}")
+        trans_text = GoogleTranslator(source="en", target=target_lang).translate(text)
+        return trans_text
+    except Exception:
         return text
 
-# ------------------ Health Report Generator ------------------
-class HealthReportGenerator:
-    def __init__(self, logo_path=None, font_name="NotoFont"):
-        self.styles = getSampleStyleSheet()
-        self.logo_path = logo_path
-        self.font_name = font_name
-        self.setup_custom_styles()
+# ------------------ Helpers for numeric normalization ------------------
+def normalize_number_str(s: str):
+    """
+    Convert Unicode digits (e.g. Devanagari, Bengali) to ASCII digits,
+    remove common thousands separators, normalize dash/minus, and keep only digits, '.' and '-'.
+    Returns normalized ASCII string or empty string if nothing numeric found.
+    """
+    if s is None:
+        return ""
+    s = str(s).strip()
 
-    def setup_custom_styles(self):
-        self.title_style = ParagraphStyle('Title', parent=self.styles['Heading1'],
-                                          fontSize=22, textColor=colors.HexColor("#1A237E"),
-                                          alignment=1, spaceAfter=20, fontName=self.font_name)
-        self.sub_title_style = ParagraphStyle('Subtitle', parent=self.styles['Normal'],
-                                              fontSize=12, textColor=colors.grey,
-                                              alignment=1, spaceAfter=30, fontName=self.font_name)
-        self.section_header_style = ParagraphStyle('SectionHeader', parent=self.styles['Heading2'],
-                                                   fontSize=14, textColor=colors.HexColor("#0D47A1"),
-                                                   alignment=0, spaceBefore=12, spaceAfter=6,
-                                                   fontName=self.font_name)
-        self.normal_text = ParagraphStyle('NormalText', parent=self.styles['Normal'],
-                                          fontSize=10, textColor=colors.black,
-                                          alignment=0, spaceAfter=4, fontName=self.font_name)
-        self.status_high = ParagraphStyle('StatusHigh', parent=self.styles['Normal'],
-                                          fontSize=10, textColor=colors.red, fontName=self.font_name)
-        self.status_low = ParagraphStyle('StatusLow', parent=self.styles['Normal'],
-                                         fontSize=10, textColor=colors.blue, fontName=self.font_name)
-        self.status_normal = ParagraphStyle('StatusNormal', parent=self.styles['Normal'],
-                                            fontSize=10, textColor=colors.green, fontName=self.font_name)
-        self.footnote_style = ParagraphStyle('Footnote', parent=self.styles['Normal'],
-                                             fontSize=8, textColor=colors.grey,
-                                             alignment=1, spaceBefore=20, fontName=self.font_name)
+    normalized_chars = []
+    for ch in s:
+        # Try numeric digit conversion for many Unicode digit blocks
+        try:
+            d = unicodedata.digit(ch)
+            normalized_chars.append(str(d))
+            continue
+        except (TypeError, ValueError):
+            pass
 
-    # ------------------ Parse reference range ------------------
+        # Normalize various dash/minus characters to ASCII '-'
+        if ch in "−–—\u2012\u2013\u2014\u2212":
+            normalized_chars.append('-')
+            continue
+
+        # Accept ASCII digits and dot/minus
+        if ch.isascii() and (ch.isdigit() or ch in ".-"):
+            normalized_chars.append(ch)
+            continue
+
+        # Ignore common thousands separators
+        if ch in [",", "\u2009", "\u202f"]:
+            continue
+
+        # ignore other characters (units, letters, whitespace)
+        pass
+
+    cleaned = "".join(normalized_chars)
+
+    # If multiple dots, collapse to single dot (keep first)
+    if cleaned.count('.') > 1:
+        parts = cleaned.split('.')
+        cleaned = parts[0] + '.' + ''.join(parts[1:])
+
+    # Remove stray hyphens not leading
+    if cleaned.count('-') > 1:
+        # keep only one leading hyphen if present
+        cleaned = cleaned.replace('-', '')
+    if '-' in cleaned and not cleaned.startswith('-'):
+        cleaned = cleaned.replace('-', '')
+
+    cleaned = cleaned.strip('.').strip()
+    return cleaned
+
+# ------------------ Cairo/Pango Health Report Generator ------------------
+class CairoHealthReportGenerator:
+    
+    def __init__(self, font_family="Noto Sans"):
+        self.font_family = font_family
+        self.current_y = MARGIN + HEADER_HEIGHT
+        self.page_num = 1
+        self.ctx = None # cairo.Context
+        self.surface = None # cairo.PDFSurface
+
+    # --- Utility: Pango Text Rendering ---
+    def draw_pango_text(self, text, x, y, size=10, weight='Normal', color_rgb=(0, 0, 0), align='LEFT', max_width=A4_WIDTH):
+        
+        self.ctx.set_source_rgb(*color_rgb)
+        
+        # Create Pango layout
+        layout = PangoCairo.create_layout(self.ctx)
+        
+        # Set font description
+        font_desc_str = f'{self.font_family} {weight} {size}'
+        layout.set_font_description(Pango.FontDescription(font_desc_str))
+        
+        # Handle simple bold tagging for keys (e.g., <b>Test:</b>)
+        try:
+            if isinstance(text, str) and ('<' in text and '>' in text):
+                # assume markup safe — Pango will raise if markup invalid
+                layout.set_markup(text, -1)
+            else:
+                layout.set_text(str(text), -1)
+        except Exception:
+            # fallback to plain text if markup fails
+            layout.set_text(re.sub(r'<[^>]+>', '', str(text)), -1)
+        
+        # Set width for wrapping
+        layout.set_width(int((max_width - x) * Pango.SCALE)) 
+        layout.set_wrap(Pango.WrapMode.WORD)
+
+        if align == 'CENTER':
+            layout.set_alignment(Pango.Alignment.CENTER)
+        elif align == 'RIGHT':
+            layout.set_alignment(Pango.Alignment.RIGHT)
+        else:
+            layout.set_alignment(Pango.Alignment.LEFT)
+
+        # Render the text
+        self.ctx.move_to(x, y)
+        PangoCairo.show_layout(self.ctx, layout)
+        
+        # Return the height used by the text
+        extents = layout.get_extents()
+        if extents[1].height > 0:
+            height = extents[1].height / Pango.SCALE
+            return height
+        return LINE_HEIGHT
+    
+    # --- Utility: Color Map ---
+    def get_status_color(self, status_text):
+        RED = (1, 0, 0)
+        BLUE = (0, 0, 1)
+        GREEN = (0, 0.5, 0)
+        
+        try:
+            status_upper = status_text.upper()
+        except Exception:
+            status_upper = ""
+        if status_upper in ["HIGH", "HOGH"]:
+            return RED
+        elif status_upper in ["LOW"]:
+            return BLUE
+        else:
+            return GREEN
+
+    # --- Header/Footer/Page Management ---
+    def start_new_page(self):
+        if self.page_num > 1:
+            self.surface.show_page()
+        
+        self.page_num += 1
+        # Set Y position for content below the header
+        self.current_y = MARGIN + HEADER_HEIGHT 
+        self.draw_header_footer()
+        
+    def draw_header_footer(self):
+        
+        BLUE = (0.1, 0.1, 0.5)
+        GREY = (0.5, 0.5, 0.5)
+        
+        # --- Header ---
+        self.ctx.set_source_rgb(*BLUE)
+        self.ctx.set_line_width(0.5)
+        
+        # Top line
+        self.ctx.move_to(MARGIN, HEADER_HEIGHT - 10)
+        self.ctx.line_to(A4_WIDTH - MARGIN, HEADER_HEIGHT - 10)
+        self.ctx.stroke()
+        
+        # Title text (fixed English title on header for simplicity)
+        self.draw_pango_text("Health Report Summary", MARGIN, 15, 9, 'Bold', BLUE)
+
+        # --- Footer ---
+        self.ctx.set_source_rgb(*GREY)
+        
+        # Date/Page
+        date_str = f"Generated on {datetime.now().strftime('%B %d, %Y')}"
+        self.draw_pango_text(date_str, MARGIN, A4_HEIGHT - 20, 8, color_rgb=GREY)
+        self.draw_pango_text(f"Page {self.page_num}", A4_WIDTH - MARGIN, A4_HEIGHT - 20, 8, color_rgb=GREY, align='RIGHT')
+
+
+    # --- Parse reference range (robust) ---
     def parse_reference_range(self, reference_range):
+        """
+        Accepts strings like '11.5 - 15.5' (also Unicode digits/dashes).
+        Returns {'normal_min': float, 'normal_max': float} or None.
+        """
         if not reference_range:
             return None
-        match = re.search(r'(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)', reference_range)
+
+        ref = str(reference_range).strip()
+        # normalize dash variants to ASCII hyphen
+        ref = ref.replace('\u2013', '-').replace('\u2014', '-').replace('\u2212', '-').replace('\u2010', '-')
+        # flexible regex capturing groups with possible localized digits/commas/dots
+        match = re.search(r'([0-9\-\.,\u2009\u202f\u0966-\u096F\u09E6-\u09EF\u0BE6-\u0BEF\u0C66-\u0C6F\u0CE6-\u0CEF\u0AE6-\u0AEF\u0B66-\u0B6F\u0D66-\u0D6F\u0660-\u0669]+)\s*[-–—]\s*([0-9\-\.,\u2009\u202f\u0966-\u096F\u09E6-\u09EF\u0BE6-\u0BEF\u0C66-\u0C6F\u0CE6-\u0CEF\u0AE6-\u0AEF\u0B66-\u0B6F\u0D66-\u0D6F\u0660-\u0669]+)', ref)
         if match:
-            return {'normal_min': float(match.group(1)), 'normal_max': float(match.group(2))}
+            a_raw, b_raw = match.group(1), match.group(2)
+            a_norm = normalize_number_str(a_raw)
+            b_norm = normalize_number_str(b_raw)
+            try:
+                a_val = float(a_norm) if a_norm != "" else None
+                b_val = float(b_norm) if b_norm != "" else None
+                if a_val is not None and b_val is not None:
+                    normal_min, normal_max = min(a_val, b_val), max(a_val, b_val)
+                    return {'normal_min': float(normal_min), 'normal_max': float(normal_max)}
+            except Exception:
+                return None
         return None
 
-    # ------------------ Bar chart ------------------
-    def create_bar_chart(self, result_value, test_data):
-        drawing = Drawing(300, 50)
+    # --- Bar chart (robust) ---
+    def draw_bar_chart(self, x_start, y_start, result_value, test_data):
+        
         bar_width, bar_height = 220, 12
-        bar_x, bar_y = 50, 20
-
+        
         try:
-            val_str = str(result_value).replace(',', '').replace('+', '')
-            if not val_str or val_str.lower() in ['nil', 'negative', 'absent', 'present', 'clear']:
-                return None
-
+            # Normalize result value (handles localized numerals & stray chars)
+            val_str_raw = str(result_value) if result_value is not None else ""
+            val_str = normalize_number_str(val_str_raw)
+            if not val_str:
+                # Draw placeholder "N/A" bar
+                self.ctx.set_source_rgb(0.95, 0.95, 0.95)
+                self.ctx.rectangle(x_start, y_start, bar_width, bar_height)
+                self.ctx.fill_preserve()
+                self.ctx.set_source_rgb(0.7, 0.7, 0.7)
+                self.ctx.set_line_width(0.25)
+                self.ctx.stroke()
+                self.draw_pango_text("N/A", x_start + 4, y_start + bar_height + 4, 7, color_rgb=(0.5, 0.5, 0.5))
+                return bar_height + 20
+            
             numeric_value = float(val_str)
-            ranges = test_data.get('ranges') or self.parse_reference_range(test_data.get('reference_range', ''))
+            ranges = None
+            if isinstance(test_data.get('ranges'), dict):
+                ranges = test_data.get('ranges')
+            else:
+                ranges = self.parse_reference_range(test_data.get('reference_range', ''))
+            
+            # If no ranges, draw placeholder bar but still show marker
             if not ranges:
-                return None
+                self.ctx.set_line_width(0.25)
+                self.ctx.rectangle(x_start, y_start, bar_width, bar_height)
+                self.ctx.set_source_rgb(0.95, 0.95, 0.95)
+                self.ctx.fill_preserve()
+                self.ctx.set_source_rgb(0.7, 0.7, 0.7)
+                self.ctx.stroke()
+
+                chart_max = max(numeric_value * 1.2, numeric_value + 1.0)
+                value_pos_x = x_start + (min(numeric_value, chart_max) / chart_max) * bar_width
+                self.ctx.set_source_rgb(1.0, 0.0, 0.0)
+                self.ctx.set_line_width(1.2)
+                self.ctx.move_to(value_pos_x, y_start - 3)
+                self.ctx.line_to(value_pos_x, y_start + bar_height + 3)
+                self.ctx.stroke()
+                self.draw_pango_text(f"{result_value}", value_pos_x - 10, y_start + bar_height + 5, 7, color_rgb=(1, 0, 0))
+                return bar_height + 25
 
             normal_min, normal_max = ranges['normal_min'], ranges['normal_max']
-            chart_max = max(normal_max * 1.3, numeric_value * 1.2)
+            if normal_max <= normal_min:
+                normal_max = normal_min + max(1.0, abs(normal_min) * 0.1)
 
-            low_width = (normal_min / chart_max) * bar_width
-            normal_width = ((normal_max - normal_min) / chart_max) * bar_width
-            high_width = bar_width - low_width - normal_width
+            chart_max = max(normal_max * 1.3, numeric_value * 1.2, normal_min + 1.0)
+            
+            # Colors
+            PINK = (1.0, 0.8, 0.8)
+            LIGHTGREEN = (0.7, 1.0, 0.7)
+            LIGHTYELLOW = (1.0, 1.0, 0.7)
+            RED = (1.0, 0.0, 0.0)
 
-            if low_width > 0:
-                drawing.add(Rect(bar_x, bar_y, low_width, bar_height, fillColor=colors.pink, strokeColor=colors.black, strokeWidth=0.25))
-            drawing.add(Rect(bar_x + low_width, bar_y, normal_width, bar_height, fillColor=colors.lightgreen, strokeColor=colors.black, strokeWidth=0.25))
-            if high_width > 0:
-                drawing.add(Rect(bar_x + low_width + normal_width, bar_y, high_width, bar_height, fillColor=colors.lightyellow, strokeColor=colors.black, strokeWidth=0.25))
+            # Calculate widths (with clamping)
+            low_width = max(0.0, (normal_min / chart_max) * bar_width)
+            normal_width = max(0.0, ((normal_max - normal_min) / chart_max) * bar_width)
+            low_width = min(low_width, bar_width)
+            normal_width = min(normal_width, bar_width - low_width)
+            high_width = max(0.0, bar_width - (low_width + normal_width))
 
-            value_pos = bar_x + (min(numeric_value, chart_max) / chart_max) * bar_width
-            drawing.add(Rect(value_pos - 1, bar_y - 3, 2, bar_height + 6, fillColor=colors.red, strokeColor=colors.red))
-            drawing.add(String(value_pos - 10, bar_y + bar_height + 5, f"{result_value}", fontName=self.font_name, fontSize=7, fillColor=colors.red))
-            return drawing
+            # Draw Bar Background
+            x = x_start
+            self.ctx.set_line_width(0.25)
+            
+            # Low
+            if low_width > 0.001:
+                self.ctx.rectangle(x, y_start, low_width, bar_height)
+                self.ctx.set_source_rgb(*PINK)
+                self.ctx.fill_preserve()
+                self.ctx.set_source_rgb(0, 0, 0)
+                self.ctx.stroke()
+                x += low_width
+                
+            # Normal
+            if normal_width > 0.001:
+                self.ctx.rectangle(x, y_start, normal_width, bar_height)
+                self.ctx.set_source_rgb(*LIGHTGREEN)
+                self.ctx.fill_preserve()
+                self.ctx.set_source_rgb(0, 0, 0)
+                self.ctx.stroke()
+                x += normal_width
 
+            # High (rest of the bar)
+            if high_width > 0.001:
+                self.ctx.rectangle(x, y_start, high_width, bar_height)
+                self.ctx.set_source_rgb(*LIGHTYELLOW)
+                self.ctx.fill_preserve()
+                self.ctx.set_source_rgb(0, 0, 0)
+                self.ctx.stroke()
+            
+            # Draw Value Marker (Red Line)
+            value_pos_x = x_start + (min(max(numeric_value, 0.0), chart_max) / chart_max) * bar_width
+            self.ctx.set_source_rgb(*RED)
+            self.ctx.set_line_width(1.5)
+            self.ctx.move_to(value_pos_x, y_start - 3)
+            self.ctx.line_to(value_pos_x, y_start + bar_height + 3)
+            self.ctx.stroke()
+            
+            # Draw Value Text (avoid clipping off right edge)
+            text_x = value_pos_x - 10
+            if text_x + 40 > A4_WIDTH - MARGIN:
+                text_x = A4_WIDTH - MARGIN - 40
+            self.draw_pango_text(f"{result_value}", text_x, y_start + bar_height + 5, 7, color_rgb=RED)
+
+            return bar_height + 25 # Height used by the chart
+            
         except Exception:
-            return None
+            self.draw_pango_text("N/A", x_start, y_start, 10, color_rgb=(0.5, 0.5, 0.5))
+            return 15
 
-    # ------------------ Test section ------------------
-    def create_test_section(self, test_data, labels):
-        elements = []
-        status = test_data.get('status', 'UNKNOWN')
-        if status.upper() == "HIGH":
-            status_para = Paragraph(status, self.status_high)
-        elif status.upper() == "LOW":
-            status_para = Paragraph(status, self.status_low)
-        else:
-            status_para = Paragraph(status, self.status_normal)
-
-        chart = self.create_bar_chart(test_data['value'], test_data)
-        chart_flowable = ChartFlowable(chart) if chart else Paragraph("N/A", self.normal_text)
-
-        table_data = [
-            [Paragraph(f"<b>{labels.get('Test','Test')}:</b>", self.normal_text), Paragraph(test_data['name'], self.normal_text)],
-            [Paragraph(f"<b>{labels.get('Result','Result')}:</b>", self.normal_text), Paragraph(f"{test_data['value']} {test_data.get('unit','')}", self.normal_text)],
-            [Paragraph(f"<b>{labels.get('Status','Status')}:</b>", self.normal_text), status_para],
-            [Paragraph(f"<b>{labels.get('Reference','Reference')}:</b>", self.normal_text), Paragraph(test_data.get('reference_range','N/A'), self.normal_text)],
-            [Paragraph(f"<b>{labels.get('Chart','Chart')}:</b>", self.normal_text), chart_flowable]
+    # --- Test section (Manual Table Drawing) ---
+    def draw_test_section(self, test_data, labels):
+        
+        CELL_MARGIN = 5
+        KEY_WIDTH = 80
+        VALUE_WIDTH = A4_WIDTH - 2 * MARGIN - KEY_WIDTH - 2 * CELL_MARGIN
+        
+        # Row data: (Key label, Value content, Status related, Chart required)
+        rows = [
+            (labels.get('Test','Test'), test_data['name'], False, False),
+            (labels.get('Result','Result'), f"{test_data['value']} {test_data.get('unit','')}".strip(), True, False),
+            (labels.get('Status','Status'), test_data.get('status',''), True, False),
+            (labels.get('Reference','Reference'), test_data.get('reference_range','N/A'), False, False),
+            (labels.get('Chart','Chart'), test_data['value'], False, True)
         ]
-
+        
         if 'meaning' in test_data and test_data['meaning']:
-            table_data.append([Paragraph(f"<b>{labels.get('Meaning','Meaning')}:</b>", self.normal_text), Paragraph(test_data['meaning'], self.normal_text)])
+            rows.append((labels.get('Meaning','Meaning'), test_data['meaning'], False, False))
         if 'tips' in test_data and test_data['tips']:
-            table_data.append([Paragraph(f"<b>{labels.get('Tips','Tips')}:</b>", self.normal_text), Paragraph(test_data['tips'], self.normal_text)])
+            rows.append((labels.get('Tips','Tips'), test_data['tips'], False, False))
 
-        table = Table(table_data, colWidths=[80, 380])
-        table.setStyle(TableStyle([
-            ('BOX', (0,0), (-1,-1), 0.6, colors.grey),
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('LEFTPADDING', (0,0), (-1,-1), 6),
-            ('RIGHTPADDING', (0,0), (-1,-1), 6),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ]))
+        # --- 1. Calculate Table Height ---
+        total_height = 0
+        row_heights = []
+        
+        for key, value, is_status, is_chart in rows:
+            if is_chart:
+                height = 35 + 2 * CELL_MARGIN
+            else:
+                # Use a temporary layout to measure wrapping height
+                temp_layout = PangoCairo.create_layout(self.ctx)
+                # Now decide whether to set markup or plain text based on the VALUE content
+                try:
+                    if isinstance(value, str) and ('<' in value and '>' in value):
+                        temp_layout.set_markup(value, -1)
+                    else:
+                        temp_layout.set_text(str(value), -1)
+                except Exception:
+                    # fallback plain text if markup fails
+                    temp_layout.set_text(re.sub(r'<[^>]+>', '', str(value)), -1)
 
-        elements.append(table)
-        elements.append(Spacer(1, 0.25 * inch))
-        return elements
+                temp_layout.set_font_description(Pango.FontDescription(f'{self.font_family} Normal 10'))
+                temp_layout.set_width(int(VALUE_WIDTH * Pango.SCALE))
+                temp_layout.set_wrap(Pango.WrapMode.WORD)
+                
+                pango_height = temp_layout.get_extents()[1].height / Pango.SCALE
+                height = max(LINE_HEIGHT, pango_height) + 2 * CELL_MARGIN
+            
+            row_heights.append(height)
+            total_height += height
+
+        # --- 2. Check Page Break ---
+        if self.current_y + total_height + 15 > A4_HEIGHT - FOOTER_HEIGHT - MARGIN:
+            self.start_new_page()
+            
+        # --- 3. Draw Table Structure ---
+        table_x = MARGIN
+        table_y = self.current_y
+        current_y_pos = table_y
+        
+        # Outer box
+        self.ctx.set_line_width(0.6)
+        self.ctx.set_source_rgb(0.5, 0.5, 0.5) 
+        self.ctx.rectangle(table_x, table_y, A4_WIDTH - 2 * MARGIN, total_height)
+        self.ctx.stroke()
+        
+        # Inner grid setup
+        self.ctx.set_line_width(0.25)
+        self.ctx.set_source_rgb(0.8, 0.8, 0.8)
+
+        # --- 4. Draw Rows and Content ---
+        for i, ((key, value, is_status, is_chart), row_h) in enumerate(zip(rows, row_heights)):
+            
+            # Draw Row Separator (Inner Grid)
+            self.ctx.move_to(table_x, current_y_pos + row_h)
+            self.ctx.line_to(A4_WIDTH - MARGIN, current_y_pos + row_h)
+            self.ctx.stroke()
+            
+            # Draw Key-Value Separator (Inner Grid)
+            self.ctx.move_to(table_x + KEY_WIDTH, current_y_pos)
+            self.ctx.line_to(table_x + KEY_WIDTH, current_y_pos + row_h)
+            self.ctx.stroke()
+            
+            # Key column background for the first row (Header)
+            if i == 0:
+                self.ctx.rectangle(table_x, current_y_pos, KEY_WIDTH, row_h)
+                self.ctx.set_source_rgb(0.95, 0.95, 0.95)
+                self.ctx.fill()
+                self.ctx.set_source_rgb(0.8, 0.8, 0.8) 
+                self.ctx.rectangle(table_x, current_y_pos, KEY_WIDTH, row_h)
+                self.ctx.stroke()
+
+            # 1. Draw Key Text (Bold using Pango markup)
+            self.draw_pango_text(f"<b>{key}:</b>", 
+                                 table_x + CELL_MARGIN, current_y_pos + CELL_MARGIN, 10, 'Bold')
+            
+            # 2. Draw Value Content
+            value_x = table_x + KEY_WIDTH + CELL_MARGIN
+            value_y = current_y_pos + CELL_MARGIN
+            
+            if is_chart:
+                self.draw_bar_chart(value_x, value_y, value, test_data)
+            elif is_status:
+                color_rgb = self.get_status_color(value)
+                self.draw_pango_text(value, value_x, value_y, 10, 'Bold', color_rgb=color_rgb, max_width=A4_WIDTH - MARGIN)
+            else:
+                self.draw_pango_text(value, value_x, value_y, 10, max_width=A4_WIDTH - MARGIN)
+                
+            current_y_pos += row_h
+
+        self.current_y = current_y_pos + 15 # Spacer after table
 
 
-    # ------------------ Header/Footer ------------------
-    def add_header_footer(self, canvas, doc):
-        canvas.saveState()
-        # --- Add Image on Top ---
-        try:
-            img_width = 240  # adjust size
-            img_height = 30
-            x = (A4[0]) / 2
-            y = A4[1] - 30               # from top margin
-            canvas.drawImage(self.logo_path, x, y, width=img_width, height=img_height, preserveAspectRatio=True)
-        except Exception as e:
-            print(f"⚠️ Could not load image: {e}")
-        canvas.setFont(self.font_name, 9)
-        canvas.setFillColor(colors.HexColor("#1A237E"))
-        canvas.drawString(30, A4[1] - 30, "Health Report Summary")
-        canvas.setFont(self.font_name, 8)
-        canvas.setFillColor(colors.grey)
-        canvas.drawString(30, 20, f"Generated on {datetime.now().strftime('%B %d, %Y')}")
-        canvas.drawRightString(A4[0] - 30, 20, f"Page {doc.page}")
-        canvas.restoreState()
-
-    # ------------------ Generate PDF from data ------------------
+    # --- Generate PDF from data ---
     def generate_pdf_from_data(self, report_data, output_pdf_path, lang_name="English", labels=None):
         if labels is None:
             labels = {label: label for label in COMMON_LABELS}
+            
         try:
-            doc = SimpleDocTemplate(output_pdf_path, pagesize=A4,
-                                    topMargin=0.8*inch, bottomMargin=0.8*inch,
-                                    leftMargin=0.75*inch, rightMargin=0.75*inch)
-            story = []
-            story.append(Spacer(1, 2*inch))
-            story.append(Paragraph(labels.get("Health Report Summary", "Health Report Summary"), self.title_style))
-            story.append(Paragraph(labels.get("Confidential Medical Document", "Confidential Medical Document"), self.sub_title_style))
-            story.append(Paragraph(f"{labels.get('Language','Language')}: {lang_name}", self.normal_text))
-            story.append(Paragraph(f"{labels.get('Generated on','Generated on')}: {datetime.now().strftime('%B %d, %Y')}", self.normal_text))
-            story.append(PageBreak())
+            # 1. Setup Cairo Surface and Context
+            self.surface = cairo.PDFSurface(output_pdf_path, A4_WIDTH, A4_HEIGHT)
+            self.ctx = cairo.Context(self.surface)
+            
+            self.page_num = 1
+            
+            # --- Dedicated First Page for Titles (Page 1) ---
+            
+            # Set Y position for titles (centered vertically)
+            self.current_y = A4_HEIGHT
+            
+            # 1a. Draw Titles
+            report_title = labels.get("Health Report Summary")
+            sub_title = labels.get("Confidential Medical Document")
+            self.start_new_page()
+            
+            self.draw_pango_text(report_title, A4_WIDTH-600, self.current_y, 22, 'Bold', (0.1, 0.14, 0.5), 'CENTER', max_width=A4_WIDTH)
+            self.current_y += 40
+            self.draw_pango_text(sub_title, A4_WIDTH-600, self.current_y, 16, 'Normal', (0.5, 0.5, 0.5), 'CENTER', max_width=A4_WIDTH)
+            self.current_y += 30
+            
+            # 1b. Language and Generated Info (at bottom of first page)
+            lang_label = labels.get('Language','Language')
+            generated_label = labels.get('Generated on','Generated on')
+            
+            # Place this info near the bottom, before the footer area
+            info_y = A4_HEIGHT - 100
+            self.draw_pango_text(f"<b>{lang_label}:</b> {lang_name}", MARGIN, info_y, 10, 'Normal', max_width=A4_WIDTH)
+            info_y += 15
+            self.draw_pango_text(f"<b>{generated_label}:</b> {datetime.now().strftime('%B %d, %Y')}", MARGIN, info_y, 10, 'Normal', max_width=A4_WIDTH)
+            
+            # Draw the header/footer (Page 1)
+            self.draw_header_footer()
+            
+            # --- Start Second Page for Content (Page 2 onwards) ---
+            self.start_new_page() # Increments page_num to 2 and draws header/footer
+            
+            # 3. Draw Test Sections
             for test in report_data.get('tests', []):
-                story.extend(self.create_test_section(test, labels))
-            story.append(Paragraph(labels.get("End of Report", "End of Report"), self.footnote_style))
-            doc.build(story, onFirstPage=self.add_header_footer, onLaterPages=self.add_header_footer)
+                self.draw_test_section(test, labels)
+            
+            # 4. End of Report
+            end_label = labels.get("End of Report", "End of Report")
+            self.draw_pango_text(end_label, A4_WIDTH / 2, self.current_y + 10, 8, 'Normal', (0.5, 0.5, 0.5), 'CENTER', max_width=A4_WIDTH)
+            
+            # 5. Finalize PDF
+            self.surface.finish()
             return True
+            
         except Exception as e:
             print(f"❌ Error generating PDF: {str(e)}")
             return False
 
 COMMON_LABELS = [
-    "Health Report Summary",
-    "Confidential Medical Document",
-    "Language",
-    "Generated on",
-    "End of Report",
-    "Test",
-    "Result",
-    "Status",
-    "Reference",
-    "Meaning",
-    "Tips",
-    "Chart"
+    "Health Report Summary", "Confidential Medical Document", "Language",
+    "Generated on", "End of Report", "Test", "Result", "Status", 
+    "Reference", "Meaning", "Tips", "Chart"
 ]
 
 def get_translated_labels(lang_code):
+    """Translates high-level report components."""
     translated = {}
     for label in COMMON_LABELS:
-        translated[label] = translate_text(label, lang_code)
+        #translated[label] = translate_text(label, lang_code)
+        translated[label] = label
     return translated
 
 # ------------------ Multi-language PDF Runner ------------------
-def generate_multilang_reports(json_file, output_folder, logo_path=None):
+def generate_multilang_reports(json_file, output_folder):
     languages = {
         "hi": "Hindi", "bn": "Bengali", "ta": "Tamil", "te": "Telugu",
         "ml": "Malayalam", "gu": "Gujarati", "kn": "Kannada",
         "pa": "Punjabi", "or": "Odia", "as": "Assamese"
     }
 
-    with open(json_file, 'r', encoding='utf-8') as f:
-        report_data = json.load(f)
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            report_data = json.load(f)
+    except Exception:
+        print(f"❌ Error: Could not load or parse '{json_file}'.")
+        return
 
     os.makedirs(output_folder, exist_ok=True)
 
     for lang_code, lang_name in languages.items():
-        font_name = register_font_for_lang(lang_code)
+        # 1. Get Language-Specific Font Family Name
+        font_family = register_font_for_lang(lang_code)
 
-        # Translate common labels
+        # 2. Get Translated Labels (titles)
         labels = get_translated_labels(lang_code)
 
-        # Translate test data
+        # 3. Translate test data content
         translated_data = {"tests": []}
         for test in report_data.get("tests", []):
             translated_test = {
@@ -609,28 +1201,44 @@ def generate_multilang_reports(json_file, output_folder, logo_path=None):
             translated_data["tests"].append(translated_test)
 
         output_pdf = f"{output_folder}/health_report_{lang_code}.pdf"
-        generator = HealthReportGenerator(logo_path=logo_path, font_name=font_name)
+        
+        # 4. Generate PDF using Cairo/Pango
+        generator = CairoHealthReportGenerator(font_family=font_family)
         success = generator.generate_pdf_from_data(translated_data, output_pdf, lang_name, labels)
+        
         if success:
-            print(f"✅ Generated {lang_name} report: {output_pdf}")
+            print(f"✅ Generated {lang_name} report: {output_pdf} using font: {font_family}")
         else:
             print(f"❌ Failed to generate {lang_name} report")
 
 # ------------------ Main ------------------
 def main():
-    json_file = "healthfinit-ai-modules/health_report_data.json"  # path to your input JSON
-    output_folder = "healthfinit-ai-modules/reports"
-    logo_path = "healthfinit-ai-modules/logo_img.png"  # optional
+    json_file = "health_report_data.json"
+    output_folder = "reports_multilang_new"
+    
+    if not all([cairo, Pango, PangoCairo]):
+        print("\nExiting. Cairo/Pango (GObject Introspection) libraries are missing or could not be loaded.")
+        return
+
+    os.makedirs(output_folder, exist_ok=True)
 
     # English PDF first
-    font_name = register_font_for_lang("en")
-    generator = HealthReportGenerator(logo_path=logo_path, font_name=font_name)
-    with open(json_file, 'r', encoding='utf-8') as f:
-        report_data = json.load(f)
-    generator.generate_pdf_from_data(report_data, f"{output_folder}/health_report_en.pdf", "English")
+    print("\n--- Generating English Report ---")
+    en_font_family = register_font_for_lang("en")
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            report_data = json.load(f)
+        generator_en = CairoHealthReportGenerator(font_family=en_font_family)
+        success_en = generator_en.generate_pdf_from_data(report_data, f"{output_folder}/health_report_en.pdf", "English")
+        if success_en:
+            print(f"✅ Generated English report: {output_folder}/health_report_en.pdf using font: {en_font_family}")
+    except Exception as e:
+        print(f"Exiting main: Could not load or process '{json_file}'. Error: {e}")
+        return
 
     # Generate multi-language reports
-    generate_multilang_reports(json_file, output_folder, logo_path)
+    print("\n--- Generating Multi-Language Reports ---")
+    generate_multilang_reports(json_file, output_folder)
 
 if __name__ == "__main__":
     main()
