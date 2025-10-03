@@ -625,7 +625,8 @@ FONT_MAP = {
     "pa": ("NotoSansGurmukhi-Regular.ttf", "Noto Sans Gurmukhi"),
     "or": ("NotoSansOdia-Regular.ttf", "Noto Sans Odia"),
     "as": ("NotoSansBengali-Regular.ttf", "Noto Sans Bengali"),
-    "en": ("NotoSans-Regular.ttf", "Noto Sans")
+    "en": ("NotoSans-Regular.ttf", "Noto Sans"),
+    "ur": ("NotoNastaliqUrdu-Regular.ttf", "Noto Nastaliq Urdu")
 }
 
 
@@ -643,7 +644,7 @@ def register_font_for_lang(lang_code="en"):
             "hi": "NotoSansDevanagari", "bn": "NotoSansBengali", "ta": "NotoSansTamil", 
             "te": "NotoSansTelugu", "ml": "NotoSansMalayalam", "gu": "NotoSansGujarati",
             "kn": "NotoSansKannada", "pa": "NotoSansGurmukhi", "or": "NotoSansOdia",
-            "as": "NotoSansBengali", "en": "NotoSans"
+            "as": "NotoSansBengali", "en": "NotoSans", "ur" : "NotoNastaliqUrdu"
         }
         folder = folder_map.get(lang_code, "NotoSans")
         url = f"https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/{folder}/{ttf_file}"
@@ -1167,7 +1168,7 @@ def generate_multilang_reports(json_file, output_folder):
     languages = {
         "hi": "Hindi", "bn": "Bengali", "ta": "Tamil", "te": "Telugu",
         "ml": "Malayalam", "gu": "Gujarati", "kn": "Kannada",
-        "pa": "Punjabi", "or": "Odia", "as": "Assamese"
+        "pa": "Punjabi", "or": "Odia", "as": "Assamese", "ur": "Urdu"
     }
 
     try:
