@@ -163,96 +163,92 @@ def parse_reference_range(reference_range):
     return None
 
 def generate_bar_chart_html(test_data, result_value, lang_code):
-    """Generates an HTML/SVG snippet for the bar chart."""
+    """Generates a robust HTML bar chart with proper color coding and fallback handling."""
     BAR_WIDTH = 220
     BAR_HEIGHT = 12
-    
+
     val_str = normalize_number_str(str(result_value) if result_value is not None else "")
-    
     if not val_str:
         return f'<div class="chart-container"><div class="bar-na"></div><span class="label-na">N/A</span></div>'
-        
+
     try:
         numeric_value = float(val_str)
         ranges = parse_reference_range(test_data.get('reference_range', ''))
-        
+        status = (test_data.get('status') or "").strip().lower()
+
+        # Default colors (fallback)
+        color_low = "#FF9999"     # light red/pink
+        color_normal = "#90EE90"  # light green
+        color_high = "#FFFF99"    # light yellow
+        color_marker = "#000000"  # marker line
+
+        # --- Case 1: Missing range entirely ---
         if not ranges:
-            # Placeholder bar with marker
             chart_max = max(numeric_value * 1.2, numeric_value + 1.0)
-            value_pct = min(numeric_value, chart_max) / chart_max
-            
-            # Marker position in px
+            chart_max = chart_max if chart_max > 0 else 1.0
+            value_pct = min(max(numeric_value / chart_max, 0.0), 1.0)
             marker_pos_x = value_pct * BAR_WIDTH
-            
-            html = f'''
-            <div class="chart-container" style="width: {BAR_WIDTH}px; height: {BAR_HEIGHT+20}px;">
-                <div class="bar-na" style="width: {BAR_WIDTH}px; height: {BAR_HEIGHT}px;"></div>
-                <div class="marker" style="left: {marker_pos_x}px; height: {BAR_HEIGHT+6}px;"></div>
-                <span class="value-label" style="left: {marker_pos_x}px;">{result_value}</span>
+
+            # Highlight the whole bar by status if available
+            fill_color = {
+                "high": color_high,
+                "low": color_low,
+                "normal": color_normal
+            }.get(status, "#E0E0E0")
+
+            return f'''
+            <div class="chart-container" style="width:{BAR_WIDTH}px;height:{BAR_HEIGHT+20}px;">
+                <div class="bar-background" style="width:{BAR_WIDTH}px;height:{BAR_HEIGHT}px;background-color:{fill_color};border:0.25px solid #000;"></div>
+                <div class="marker" style="left:{marker_pos_x}px;height:{BAR_HEIGHT+6}px;border-left:1.5px solid {color_marker};"></div>
+                <span class="value-label" style="left:{marker_pos_x}px;">{result_value}</span>
             </div>
             '''
-            return html
 
-        normal_min, normal_max = ranges['normal_min'], ranges['normal_max']
+        # --- Case 2: Proper reference range ---
+        normal_min, normal_max = ranges.get('normal_min', 0), ranges.get('normal_max', 0)
         if normal_max <= normal_min:
-            normal_max = normal_min + max(1.0, abs(normal_min) * 0.1)
+            normal_max = normal_min + 1.0
 
-        chart_max = max(normal_max * 1.3, numeric_value * 1.2, normal_min + 1.0)
-        
-        # Calculate widths in percentages
-        low_pct = max(0.0, (normal_min / chart_max) * 100)
-        normal_pct = max(0.0, ((normal_max - normal_min) / chart_max) * 100)
-        
-        # Clamp to 100%
-        low_pct = min(low_pct, 100)
-        normal_pct = min(normal_pct, 100 - low_pct)
-        high_pct = max(0.0, 100 - (low_pct + normal_pct))
-        
-        # Value marker position
-        value_pct = min(max(numeric_value, 0.0), chart_max) / chart_max
-        marker_pos_x = value_pct * BAR_WIDTH # Position in pixels
+        # Extend range slightly for visualization
+        chart_min = min(normal_min, numeric_value, 0.0)
+        chart_max = max(normal_max, numeric_value)
+        span = chart_max - chart_min
+        chart_min -= 0.05 * span
+        chart_max += 0.05 * span
 
-        # RTL support: For Urdu, the bar needs to draw right-to-left
-        is_rtl = (lang_code == 'ur')
+        # Compute relative widths
+        total_span = chart_max - chart_min
+        low_width = max(0.5, (normal_min - chart_min) / total_span * 100)
+        normal_width = max(0.5, (normal_max - normal_min) / total_span * 100)
+        high_width = max(0.5, 100 - (low_width + normal_width))
 
-        # Since we use float percentages for width, standard LTR stacking works for layout, 
-        # but for RTL scripts, we rely on the parent direction to align the text/marker.
-        
-        # Generate the segmented bar
-        bar_segments = []
-        if low_pct > 0.001:
-            bar_segments.append(f'<div class="bar-segment low" style="width: {low_pct}%;"></div>')
-        if normal_pct > 0.001:
-            bar_segments.append(f'<div class="bar-segment normal" style="width: {normal_pct}%;"></div>')
-        if high_pct > 0.001:
-            # We use flex-grow for the high segment to ensure it fills the remaining space
-            bar_segments.append(f'<div class="bar-segment high" style="flex-grow: 1;"></div>')
-        
-        # Note on RTL: For bar charts, LTR visualization of quantity (low to high) is standard
-        # even for RTL text. We only need to adjust the text direction/alignment.
-        
-        html = f'''
-        <div class="chart-container" style="width: {BAR_WIDTH}px; height: {BAR_HEIGHT+20}px;">
-            <div class="bar-background" style="width: 100%; height: {BAR_HEIGHT}px; direction: ltr;">
-                {''.join(bar_segments)}
+        # Compute marker position
+        marker_pct = min(max((numeric_value - chart_min) / total_span, 0.0), 1.0)
+        marker_pos_x = marker_pct * BAR_WIDTH
+
+        # Bar HTML with segments
+        return f'''
+        <div class="chart-container" style="width:{BAR_WIDTH}px;height:{BAR_HEIGHT+20}px;">
+            <div class="bar-background" style="display:flex;width:100%;height:{BAR_HEIGHT}px;border:0.25px solid #000;">
+                <div class="bar-segment low" style="width:{low_width}%;background-color:{color_low};"></div>
+                <div class="bar-segment normal" style="width:{normal_width}%;background-color:{color_normal};"></div>
+                <div class="bar-segment high" style="width:{high_width}%;background-color:{color_high};flex-grow:1;"></div>
             </div>
-            <div class="marker" style="left: {marker_pos_x}px; height: {BAR_HEIGHT+6}px;"></div>
-            <span class="value-label" style="left: {marker_pos_x}px;">{result_value}</span>
+            <div class="marker" style="left:{marker_pos_x}px;height:{BAR_HEIGHT+6}px;border-left:1.5px solid {color_marker};"></div>
+            <span class="value-label" style="left:{marker_pos_x}px;">{result_value}</span>
         </div>
         '''
-        return html
 
-    except Exception:
-        return f'<div class="chart-container"><span style="color: #808080;">Chart Data N/A</span></div>'
+    except Exception as e:
+        print(f"⚠️ Chart generation error for test '{test_data.get('name', '')}': {e}")
+        return f'<div class="chart-container"><span style="color:#808080;">Chart N/A</span></div>'
 
 
-def get_css(lang_code, font_family):
-    """Generates the CSS style sheet dynamically."""
+
+def get_css(lang_code, font_family, letterhead_path):
+    """Generates the CSS style sheet dynamically with letterhead on each page."""
     
-    # Check if font file exists to use in @font-face
     ttf_file = FONT_MAP.get(lang_code, FONT_MAP["en"])[0]
-    
-    # Determine text direction for the main body
     direction = 'rtl' if lang_code == 'ur' else 'ltr'
     text_align = 'right' if lang_code == 'ur' else 'left'
     
@@ -264,45 +260,33 @@ def get_css(lang_code, font_family):
         font-weight: normal;
         font-style: normal;
     }}
-    @font-face {{
-        font-family: "{font_family}";
-        src: url('{ttf_file}');
-        font-weight: bold;
-        font-style: normal;
-    }}
 
-    /* --- GLOBAL STYLES --- */
     @page {{
         size: A4;
-        margin: {MARGIN}px;
-        /* Define named flows for header/footer */
-        @top {{
-            content: element(header);
-        }}
-        @bottom {{
-            content: element(footer);
-        }}
+        margin: 150px 50px 50px 50px;
+        background: url('{letterhead_path}');
+        background-size: contain;
     }}
-    
+
     body {{
         font-family: "{font_family}", sans-serif;
         font-size: 10pt;
         line-height: 1.5;
-        direction: {direction}; /* Main body direction */
+        direction: {direction};
     }}
 
     /* --- HEADER/FOOTER --- */
     #page-header {{
         position: running(header);
-        border-bottom: 0.5px solid #808080;
-        padding-bottom: 8px;
-        margin-top: 15px;
+        height: 70px;
+        margin-bottom: 10px;
     }}
     #page-header h1 {{
         color: #191970;
         font-size: 9pt;
         font-weight: bold;
         margin: 0;
+        padding-top: 0px;
     }}
 
     #page-footer {{
@@ -312,7 +296,7 @@ def get_css(lang_code, font_family):
     }}
     #page-footer .date {{ float: {text_align}; }}
     #page-footer .page-num {{ float: {'left' if lang_code == 'ur' else 'right'}; }}
-    
+
     /* --- TITLE PAGE --- */
     .title-page {{
         page-break-after: always;
@@ -335,13 +319,13 @@ def get_css(lang_code, font_family):
     }}
     .info-box {{
         align-self: flex-start;
-        margin-top: auto; /* Pushes to bottom */
+        margin-top: auto;
         font-size: 10pt;
         text-align: {text_align};
     }}
     .info-box b {{ font-weight: bold; }}
 
-    /* --- TEST TABLE STYLES --- */
+    /* --- TABLE STYLES --- */
     .test-table {{
         width: 100%;
         border-collapse: collapse;
@@ -361,18 +345,16 @@ def get_css(lang_code, font_family):
         text-align: {text_align};
     }}
     .test-table tr:first-child .test-key-col {{ background-color: #eeeeee; }}
-    
-    /* --- STATUS COLORS --- */
+
     .status-High {{ color: #FF0000; font-weight: bold; }}
     .status-Low {{ color: #0000FF; font-weight: bold; }}
     .status-Normal, .status-NA {{ color: #008000; font-weight: bold; }}
-    
-    /* --- BAR CHART STYLES (Flexbox for layout) --- */
+
     .chart-container {{
         position: relative;
-        height: 35px; /* Height for bar + labels */
+        height: 35px;
         margin: 5px 0 15px 0;
-        direction: ltr; /* Chart bar visualization is LTR */
+        direction: ltr;
     }}
     .bar-background {{
         display: flex;
@@ -381,27 +363,16 @@ def get_css(lang_code, font_family):
         box-sizing: border-box;
         overflow: hidden;
     }}
-    .bar-na {{
-        background-color: #f2f2f2;
-        border: 0.25px solid #808080;
-        box-sizing: border-box;
-        width: 220px;
-        height: 12px;
-    }}
-    .bar-segment {{
-        height: 100%;
-    }}
-    .low {{ background-color: #FFC0CB; }} /* Pink */
-    .normal {{ background-color: #90EE90; }} /* LightGreen */
-    .high {{ background-color: #FFFF99; }} /* LightYellow */
+    .low {{ background-color: #FFC0CB; }}
+    .normal {{ background-color: #90EE90; }}
+    .high {{ background-color: #FFFF99; }}
 
     .marker {{
         position: absolute;
         width: 1.5px;
         top: -3px;
         background-color: #FF0000;
-        /* Adjust marker position based on its own width (center) */
-        transform: translateX(-50%); 
+        transform: translateX(-50%);
     }}
     .value-label {{
         position: absolute;
@@ -409,27 +380,20 @@ def get_css(lang_code, font_family):
         font-size: 7pt;
         color: #FF0000;
         white-space: nowrap;
-        transform: translateX(-50%); /* Center text under the marker */
+        transform: translateX(-50%);
     }}
-    .label-na {{
-        position: absolute;
-        top: 15px;
-        font-size: 7pt;
-        color: #808080;
-        left: 4px;
-    }}
-    
     '''
     return css
 
-def generate_report_html(translated_data, lang_code, lang_name, labels, font_family):
-    """Generates the full HTML content."""
+def generate_report_html(translated_data, lang_code, lang_name, labels, font_family, letterhead_path="logo_img.png"):
+    """Generates the full HTML content with repeating letterhead on every page."""
     
     now = datetime.now().strftime('%B %d, %Y')
     
-    # --- 1. Header/Footer Template ---
+    # --- Header (runs on every page) ---
     header_html = f'''
     <div id="page-header">
+        <img src="{letterhead_path}" class="letterhead" alt="letterhead">
         <h1>{labels.get("Health Report Summary", "Health Report Summary")}</h1>
     </div>
     '''
@@ -440,27 +404,24 @@ def generate_report_html(translated_data, lang_code, lang_name, labels, font_fam
         <span class="page-num">Page <span class="paged-counter"></span></span>
     </div>
     '''
-
-    # --- 2. Title Page ---
+    
+    # --- Title Page ---
     title_page_html = f'''
     <div class="title-page">
         <h1>{labels.get("Health Report Summary", "Health Report Summary")}</h1>
         <h2>{labels.get("Confidential Medical Document", "Confidential Medical Document")}</h2>
-        
+
         <div class="info-box">
             <p><b>{labels.get('Language','Language')}:</b> {lang_name}</p>
             <p><b>{labels.get('Generated on','Generated on')}:</b> {now}</p>
         </div>
     </div>
     '''
-    
-    # --- 3. Content Sections ---
+
+    # --- Content ---
     content_html = ""
     for test in translated_data.get('tests', []):
-        
         status_class = f"status-{test.get('status','NA').title()}"
-        
-        # Build the table rows dynamically
         rows = [
             (labels.get('Test','Test'), f"<b>{test['name']}</b>", False),
             (labels.get('Result','Result'), f'<span class="{status_class}">{test["value"]} {test.get("unit","").strip()}</span>', False),
@@ -468,24 +429,15 @@ def generate_report_html(translated_data, lang_code, lang_name, labels, font_fam
             (labels.get('Reference','Reference'), test.get('reference_range','N/A'), False),
             (labels.get('Chart','Chart'), generate_bar_chart_html(test, test['value'], lang_code), True)
         ]
-        
         if 'meaning' in test and test['meaning']:
             rows.append((labels.get('Meaning','Meaning'), test['meaning'], False))
         if 'tips' in test and test['tips']:
             rows.append((labels.get('Tips','Tips'), test['tips'], False))
-
-        table_rows_html = ""
-        for key, value, is_chart in rows:
-            # For the chart row, we need a larger cell to hold the complex HTML
-            value_html = f'<div style="text-align: left; direction: ltr;">{value}</div>' if is_chart else value
-            
-            table_rows_html += f'''
-            <tr>
-                <td class="test-key-col">{key}:</td>
-                <td>{value_html}</td>
-            </tr>
-            '''
-
+        
+        table_rows_html = "".join(
+            f'<tr><td class="test-key-col">{key}:</td><td>{value}</td></tr>' for key, value, _ in rows
+        )
+        
         content_html += f'''
         <table class="test-table">
             <tbody>
@@ -493,47 +445,112 @@ def generate_report_html(translated_data, lang_code, lang_name, labels, font_fam
             </tbody>
         </table>
         '''
-        
-    # --- 4. End of Report ---
+    
     content_html += f'''
     <p style="text-align: center; font-size: 8pt; color: #808080; margin-top: 20px;">
         {labels.get("End of Report", "End of Report")}
     </p>
     '''
-    
-    # --- 5. Full HTML Document ---
+
+    # --- Full HTML ---
     html_doc = f'''
     <!DOCTYPE html>
     <html>
     <head>
-        <meta charset="UTF-8">
+        <meta charset="UTF-8">        
         <title>{labels.get("Health Report Summary")}</title>
+        <style>
+            @page {{
+                size: A4;
+                margin: 120px 50px 60px 50px;
+                @top-center {{
+                    content: element(page-header);
+                }}
+                @bottom-center {{
+                    content: element(page-footer);
+                }}
+            }}
+
+            body {{
+                font-family: 'Arial', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+                text-align: justify;
+            }}
+
+            /* --- Repeating Header --- */
+            #page-header {{
+                position: running(page-header);
+                height: 90px;
+                width: 100%;
+            }}
+            #page-header img.letterhead {{
+                position: absolute;
+                top: 10px;
+                right: -200px;
+                width: 200px;
+                height: auto;
+            }}
+            #page-header h1 {{
+                margin: 0;
+                padding: 0;
+                font-size: 14pt;
+                color: #191970;
+            }}
+
+            /* --- Repeating Footer --- */
+            #page-footer {{
+                position: running(page-footer);
+                font-size: 5pt;
+                color: #808080;
+                text-align: center;
+            }}
+
+            .test-table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 15px;
+                border: 0.6px solid #808080;
+            }}
+            .test-table td {{
+                padding: 5px;
+                border: 0.25px solid #808080;
+                vertical-align: middle;
+            }}
+            .test-key-col {{
+                width: 80px;
+                font-weight: bold;
+                background-color: #f8f8f8;
+            }}
+        </style>
     </head>
     <body>
+
         {header_html}
         {footer_html}
-        
         {title_page_html}
-        
+
         <div id="content">
             {content_html}
         </div>
-        
+
     </body>
     </html>
     '''
     return html_doc
 
+
 # ------------------ WeasyPrint Generator ------------------
-def generate_pdf_from_data_weasyprint(report_data, output_pdf_path, lang_code, lang_name, labels, font_family):
+def generate_pdf_from_data_weasyprint(report_data, output_pdf_path, lang_code, lang_name, labels, font_family, letterhead_path="logo_img.png"):
     
     # 1. Get CSS and HTML
-    css_content = get_css(lang_code, font_family)
-    html_content = generate_report_html(report_data, lang_code, lang_name, labels, font_family)
+    css_content = get_css(lang_code, font_family, "logo_img.png")
+    html_content = generate_report_html(report_data, lang_code, lang_name, labels, font_family, letterhead_path)
     
     try:
         # 2. Render PDF
-        html = HTML(string=html_content)
+        base_dir = os.getcwd()
+        html = HTML(string=html_content, base_url=base_dir)
         css = CSS(string=css_content)
         
         # WeasyPrint requires a FontConfiguration to manage font loading/caching
@@ -551,7 +568,7 @@ def generate_pdf_from_data_weasyprint(report_data, output_pdf_path, lang_code, l
         return False
 
 # ------------------ Multi-language PDF Runner (Modified) ------------------
-def generate_multilang_reports(json_file, output_folder):
+def generate_multilang_reports(json_file, output_folder, letterhead_path="logo_img.png"):
     languages = {
         "hi": "Hindi", "bn": "Bengali", "ta": "Tamil", "te": "Telugu",
         "ml": "Malayalam", "gu": "Gujarati", "kn": "Kannada",
@@ -591,7 +608,7 @@ def generate_multilang_reports(json_file, output_folder):
         output_pdf = f"{output_folder}/health_report_{lang_code}.pdf"
         
         # 4. Generate PDF using WeasyPrint
-        success = generate_pdf_from_data_weasyprint(translated_data, output_pdf, lang_code, lang_name, labels, font_family)
+        success = generate_pdf_from_data_weasyprint(translated_data, output_pdf, lang_code, lang_name, labels, font_family, letterhead_path)
         
         if success:
             print(f"✅ Generated {lang_name} report: {output_pdf} using font: {font_family}")
@@ -654,7 +671,7 @@ def main():
         with open(json_file, 'r', encoding='utf-8') as f:
             report_data = json.load(f)
         labels = get_translated_labels("en")
-        success_en = generate_pdf_from_data_weasyprint(report_data, f"{output_folder}/health_report_en.pdf", "en", "English", labels, en_font_family)
+        success_en = generate_pdf_from_data_weasyprint(report_data, f"{output_folder}/health_report_en.pdf", "en", "English", labels, en_font_family, letterhead_path="logo_img.png")
         if success_en:
             print(f"✅ Generated English report: {output_folder}/health_report_en.pdf using font: {en_font_family}")
     except Exception as e:
